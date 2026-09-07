@@ -1,12 +1,6 @@
 "use strict";
 
 
-/*
-|--------------------------------------------------------------------------
-| DATABASE
-|--------------------------------------------------------------------------
-*/
-
 const pool =
     require(
         "../config/db"
@@ -15,150 +9,155 @@ const pool =
 
 /*
 |--------------------------------------------------------------------------
-| GET USERS
+| NORMALIZE LIMIT
+|--------------------------------------------------------------------------
+*/
+
+function normalizeLimit(
+    value,
+    fallback = 50,
+    maximum = 100
+) {
+
+    const numericValue =
+        Number(
+            value
+        );
+
+
+    if (
+
+        !Number.isInteger(
+            numericValue
+        )
+
+        ||
+
+        numericValue <= 0
+
+    ) {
+
+        return fallback;
+
+    }
+
+
+    return Math.min(
+        numericValue,
+        maximum
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE OFFSET
+|--------------------------------------------------------------------------
+*/
+
+function normalizeOffset(
+    value
+) {
+
+    const numericValue =
+        Number(
+            value
+        );
+
+
+    if (
+
+        !Number.isInteger(
+            numericValue
+        )
+
+        ||
+
+        numericValue < 0
+
+    ) {
+
+        return 0;
+
+    }
+
+
+    return numericValue;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE SEARCH
+|--------------------------------------------------------------------------
+*/
+
+function normalizeSearch(
+    value
+) {
+
+    const search =
+        String(
+            value ||
+            ""
+        )
+        .trim();
+
+
+    if (
+        !search
+    ) {
+
+        return null;
+
+    }
+
+
+    return (
+        "%" +
+        search +
+        "%"
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET ADMIN USERS
 |--------------------------------------------------------------------------
 */
 
 async function getUsers({
 
-    search,
+    search = "",
 
-    status,
-
-    limit = 25,
+    limit = 50,
 
     offset = 0
 
-}) {
-
-    const values =
-        [];
+} = {}) {
 
 
-    const conditions =
-        [];
-
-
-    /*
-    ---------------------------------------------------------
-    Search
-    ---------------------------------------------------------
-    */
-
-    if (
-
-        search &&
-
-        String(search).trim()
-
-    ) {
-
-        values.push(
-            `%${String(search).trim()}%`
+    const safeLimit =
+        normalizeLimit(
+            limit
         );
 
 
-        conditions.push(
-
-            `
-            (
-                u.public_user_id ILIKE $${values.length}
-
-                OR
-
-                u.full_name ILIKE $${values.length}
-
-                OR
-
-                u.email ILIKE $${values.length}
-            )
-            `
-
-        );
-
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    Account status filter
-    ---------------------------------------------------------
-    */
-
-    if (
-
-        status &&
-
-        String(status).trim()
-
-    ) {
-
-        values.push(
-            String(status)
-                .trim()
-                .toLowerCase()
+    const safeOffset =
+        normalizeOffset(
+            offset
         );
 
 
-        conditions.push(
-
-            `u.account_status = $${values.length}`
-
+    const searchPattern =
+        normalizeSearch(
+            search
         );
 
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    WHERE clause
-    ---------------------------------------------------------
-    */
-
-    const whereClause =
-
-        conditions.length
-
-            ? `WHERE ${conditions.join(" AND ")}`
-
-            : "";
-
-
-    /*
-    ---------------------------------------------------------
-    Limit
-    ---------------------------------------------------------
-    */
-
-    values.push(
-        limit
-    );
-
-
-    const limitIndex =
-        values.length;
-
-
-    /*
-    ---------------------------------------------------------
-    Offset
-    ---------------------------------------------------------
-    */
-
-    values.push(
-        offset
-    );
-
-
-    const offsetIndex =
-        values.length;
-
-
-    /*
-    ---------------------------------------------------------
-    Query
-    ---------------------------------------------------------
-    */
 
     const result =
         await pool.query(
@@ -166,7 +165,14 @@ async function getUsers({
             `
             SELECT
 
-                u.id,
+                /*
+                ------------------------------------------------
+                USER DETAILS
+                ------------------------------------------------
+                */
+
+                u.id
+                    AS user_id,
 
                 u.public_user_id,
 
@@ -174,34 +180,98 @@ async function getUsers({
 
                 u.email,
 
-                u.role,
-
-                u.account_status,
-
-                u.last_login_at,
-
-                u.created_at,
-
+                COALESCE(
+                    u.phone,
+                    ''
+                )
+                    AS phone,
 
                 COALESCE(
+                    u.role,
+                    'user'
+                )
+                    AS role,
 
+                COALESCE(
+                    u.account_status,
+                    'active'
+                )
+                    AS account_status,
+
+                COALESCE(
+                    u.email_verified,
+                    false
+                )
+                    AS email_verified,
+
+                u.created_at
+                    AS user_created_at,
+
+                u.updated_at
+                    AS user_updated_at,
+
+
+                /*
+                ------------------------------------------------
+                WALLET DETAILS
+                ------------------------------------------------
+                */
+
+                w.id
+                    AS wallet_id,
+
+                COALESCE(
+                    w.currency,
+                    'INR'
+                )
+                    AS wallet_currency,
+
+                COALESCE(
+                    w.status,
+                    'missing'
+                )
+                    AS wallet_status,
+
+                w.created_at
+                    AS wallet_created_at,
+
+                w.updated_at
+                    AS wallet_updated_at,
+
+
+                /*
+                ------------------------------------------------
+                WALLET BALANCES
+                ------------------------------------------------
+                */
+
+                COALESCE(
                     wb.available_balance,
-
                     0
-
-                ) AS available_balance,
-
+                )
+                    AS available_balance,
 
                 COALESCE(
-
                     wb.pending_balance,
-
                     0
+                )
+                    AS pending_balance,
 
-                ) AS pending_balance,
 
+                (
+                    COALESCE(
+                        wb.available_balance,
+                        0
+                    )
 
-                wb.currency
+                    +
+
+                    COALESCE(
+                        wb.pending_balance,
+                        0
+                    )
+                )
+                    AS total_balance
 
 
             FROM users u
@@ -209,28 +279,74 @@ async function getUsers({
 
             LEFT JOIN wallets w
 
-                ON w.user_id = u.id
+                ON
+                    w.user_id =
+                    u.id
 
 
             LEFT JOIN wallet_balances wb
 
-                ON wb.wallet_id = w.id
+                ON
+                    wb.wallet_id =
+                    w.id
 
 
-            ${whereClause}
+            WHERE
+
+                (
+
+                    $1::text IS NULL
+
+                    OR
+
+                    u.public_user_id
+                        ILIKE $1
+
+                    OR
+
+                    u.full_name
+                        ILIKE $1
+
+                    OR
+
+                    u.email
+                        ILIKE $1
+
+                    OR
+
+                    COALESCE(
+                        u.phone,
+                        ''
+                    )
+                    ILIKE $1
+
+                )
 
 
             ORDER BY
 
-                u.created_at DESC
+                u.created_at DESC,
+
+                u.id DESC
 
 
-            LIMIT $${limitIndex}
+            LIMIT
+                $2
 
-            OFFSET $${offsetIndex}
+
+            OFFSET
+                $3
             `,
 
-            values
+            [
+
+                searchPattern,
+
+                safeLimit,
+
+                safeOffset
+
+            ]
 
         );
 
@@ -242,13 +358,22 @@ async function getUsers({
 
 /*
 |--------------------------------------------------------------------------
-| GET USER DETAILS
+| GET USERS COUNT
 |--------------------------------------------------------------------------
 */
 
-async function getUserDetails(
-    userId
-) {
+async function getUsersCount({
+
+    search = ""
+
+} = {}) {
+
+
+    const searchPattern =
+        normalizeSearch(
+            search
+        );
+
 
     const result =
         await pool.query(
@@ -256,7 +381,79 @@ async function getUserDetails(
             `
             SELECT
 
-                u.id,
+                COUNT(*)::INTEGER
+                    AS total
+
+
+            FROM users u
+
+
+            WHERE
+
+                (
+
+                    $1::text IS NULL
+
+                    OR
+
+                    u.public_user_id
+                        ILIKE $1
+
+                    OR
+
+                    u.full_name
+                        ILIKE $1
+
+                    OR
+
+                    u.email
+                        ILIKE $1
+
+                    OR
+
+                    COALESCE(
+                        u.phone,
+                        ''
+                    )
+                    ILIKE $1
+
+                )
+            `,
+
+            [
+                searchPattern
+            ]
+
+        );
+
+
+    return (
+        result.rows[0]?.total ||
+        0
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET SINGLE USER DETAILS
+|--------------------------------------------------------------------------
+*/
+
+async function getUserDetails(
+    userId
+) {
+
+
+    const result =
+        await pool.query(
+
+            `
+            SELECT
+
+                u.id
+                    AS user_id,
 
                 u.public_user_id,
 
@@ -264,34 +461,89 @@ async function getUserDetails(
 
                 u.email,
 
-                u.role,
+                COALESCE(
+                    u.phone,
+                    ''
+                )
+                    AS phone,
 
-                u.account_status,
+                COALESCE(
+                    u.role,
+                    'user'
+                )
+                    AS role,
 
-                u.last_login_at,
+                COALESCE(
+                    u.account_status,
+                    'active'
+                )
+                    AS account_status,
 
-                u.created_at,
+                COALESCE(
+                    u.email_verified,
+                    false
+                )
+                    AS email_verified,
+
+                u.created_at
+                    AS user_created_at,
+
+                u.updated_at
+                    AS user_updated_at,
+
+
+                w.id
+                    AS wallet_id,
+
+                COALESCE(
+                    w.currency,
+                    'INR'
+                )
+                    AS wallet_currency,
+
+                COALESCE(
+                    w.status,
+                    'missing'
+                )
+                    AS wallet_status,
+
+                w.created_at
+                    AS wallet_created_at,
+
+                w.updated_at
+                    AS wallet_updated_at,
 
 
                 COALESCE(
-
                     wb.available_balance,
-
                     0
-
-                ) AS available_balance,
+                )
+                    AS available_balance,
 
 
                 COALESCE(
-
                     wb.pending_balance,
-
                     0
+                )
+                    AS pending_balance,
 
-                ) AS pending_balance,
 
+                (
 
-                wb.currency
+                    COALESCE(
+                        wb.available_balance,
+                        0
+                    )
+
+                    +
+
+                    COALESCE(
+                        wb.pending_balance,
+                        0
+                    )
+
+                )
+                    AS total_balance
 
 
             FROM users u
@@ -299,12 +551,16 @@ async function getUserDetails(
 
             LEFT JOIN wallets w
 
-                ON w.user_id = u.id
+                ON
+                    w.user_id =
+                    u.id
 
 
             LEFT JOIN wallet_balances wb
 
-                ON wb.wallet_id = w.id
+                ON
+                    wb.wallet_id =
+                    w.id
 
 
             WHERE
@@ -326,7 +582,173 @@ async function getUserDetails(
         result.rowCount === 0
     ) {
 
-        return null;
+        const error =
+            new Error(
+                "USER_NOT_FOUND"
+            );
+
+
+        error.code =
+            "USER_NOT_FOUND";
+
+
+        throw error;
+
+    }
+
+
+    return result.rows[0];
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| GET USER BY PUBLIC USER ID
+|--------------------------------------------------------------------------
+*/
+
+async function getUserByPublicUserId(
+    publicUserId
+) {
+
+
+    const result =
+        await pool.query(
+
+            `
+            SELECT
+
+                u.id
+                    AS user_id,
+
+                u.public_user_id,
+
+                u.full_name,
+
+                u.email,
+
+                COALESCE(
+                    u.phone,
+                    ''
+                )
+                    AS phone,
+
+                COALESCE(
+                    u.role,
+                    'user'
+                )
+                    AS role,
+
+                COALESCE(
+                    u.account_status,
+                    'active'
+                )
+                    AS account_status,
+
+                COALESCE(
+                    u.email_verified,
+                    false
+                )
+                    AS email_verified,
+
+
+                w.id
+                    AS wallet_id,
+
+                COALESCE(
+                    w.currency,
+                    'INR'
+                )
+                    AS wallet_currency,
+
+                COALESCE(
+                    w.status,
+                    'missing'
+                )
+                    AS wallet_status,
+
+
+                COALESCE(
+                    wb.available_balance,
+                    0
+                )
+                    AS available_balance,
+
+
+                COALESCE(
+                    wb.pending_balance,
+                    0
+                )
+                    AS pending_balance,
+
+
+                (
+
+                    COALESCE(
+                        wb.available_balance,
+                        0
+                    )
+
+                    +
+
+                    COALESCE(
+                        wb.pending_balance,
+                        0
+                    )
+
+                )
+                    AS total_balance
+
+
+            FROM users u
+
+
+            LEFT JOIN wallets w
+
+                ON
+                    w.user_id =
+                    u.id
+
+
+            LEFT JOIN wallet_balances wb
+
+                ON
+                    wb.wallet_id =
+                    w.id
+
+
+            WHERE
+
+                u.public_user_id =
+                $1
+
+
+            LIMIT 1
+            `,
+
+            [
+                publicUserId
+            ]
+
+        );
+
+
+    if (
+        result.rowCount === 0
+    ) {
+
+        const error =
+            new Error(
+                "USER_NOT_FOUND"
+            );
+
+
+        error.code =
+            "USER_NOT_FOUND";
+
+
+        throw error;
 
     }
 
@@ -356,26 +778,6 @@ async function updateUserStatus({
 
 }) {
 
-    /*
-    ---------------------------------------------------------
-    Validate user ID
-    ---------------------------------------------------------
-    */
-
-    if (!userId) {
-
-        throw new Error(
-            "USER_NOT_FOUND"
-        );
-
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    Normalize status
-    ---------------------------------------------------------
-    */
 
     const normalizedStatus =
         String(
@@ -386,24 +788,17 @@ async function updateUserStatus({
         .toLowerCase();
 
 
-    /*
-    ---------------------------------------------------------
-    Allowed statuses
-    ---------------------------------------------------------
-    */
+    const allowedStatuses = [
 
-    const allowedStatuses =
-        [
+        "active",
 
-            "active",
+        "suspended",
 
-            "inactive",
+        "frozen",
 
-            "suspended",
+        "blocked"
 
-            "blocked"
-
-        ];
+    ];
 
 
     if (
@@ -414,148 +809,315 @@ async function updateUserStatus({
 
     ) {
 
-        throw new Error(
-            "INVALID_ACCOUNT_STATUS"
-        );
+        const error =
+            new Error(
+                "INVALID_ACCOUNT_STATUS"
+            );
+
+
+        error.code =
+            "INVALID_ACCOUNT_STATUS";
+
+
+        throw error;
 
     }
 
 
-    /*
-    ---------------------------------------------------------
-    Get current user
-    ---------------------------------------------------------
-    */
+    const client =
+        await pool.connect();
 
-    const currentResult =
-        await pool.query(
 
-            `
-            SELECT
+    try {
 
-                id,
 
-                account_status
-
-            FROM users
-
-            WHERE id = $1
-
-            LIMIT 1
-            `,
-
-            [
-                userId
-            ]
-
+        await client.query(
+            "BEGIN"
         );
 
 
-    if (
-        currentResult.rowCount === 0
+        const currentResult =
+            await client.query(
+
+                `
+                SELECT
+
+                    id,
+
+                    public_user_id,
+
+                    full_name,
+
+                    email,
+
+                    account_status
+
+                FROM users
+
+                WHERE
+                    id = $1
+
+                LIMIT 1
+
+                FOR UPDATE
+                `,
+
+                [
+                    userId
+                ]
+
+            );
+
+
+        if (
+            currentResult.rowCount === 0
+        ) {
+
+            const error =
+                new Error(
+                    "USER_NOT_FOUND"
+                );
+
+
+            error.code =
+                "USER_NOT_FOUND";
+
+
+            throw error;
+
+        }
+
+
+        const currentUser =
+            currentResult.rows[0];
+
+
+        if (
+
+            String(
+                currentUser.account_status ||
+                ""
+            )
+            .toLowerCase()
+
+            ===
+
+            normalizedStatus
+
+        ) {
+
+            const error =
+                new Error(
+                    "STATUS_ALREADY_SET"
+                );
+
+
+            error.code =
+                "STATUS_ALREADY_SET";
+
+
+            throw error;
+
+        }
+
+
+        const updateResult =
+            await client.query(
+
+                `
+                UPDATE users
+
+                SET
+
+                    account_status =
+                        $1,
+
+                    updated_at =
+                        NOW()
+
+                WHERE
+
+                    id =
+                        $2
+
+                RETURNING
+
+                    id
+                        AS user_id,
+
+                    public_user_id,
+
+                    full_name,
+
+                    email,
+
+                    account_status,
+
+                    updated_at
+                `,
+
+                [
+
+                    normalizedStatus,
+
+                    userId
+
+                ]
+
+            );
+
+
+        /*
+        ------------------------------------------------------
+        AUDIT LOG
+        ------------------------------------------------------
+        */
+
+        try {
+
+            await client.query(
+
+                `
+                INSERT INTO audit_logs (
+
+                    actor_user_id,
+
+                    action,
+
+                    entity_type,
+
+                    entity_id,
+
+                    before_data,
+
+                    after_data,
+
+                    ip_address,
+
+                    user_agent,
+
+                    created_at
+
+                )
+
+                VALUES (
+
+                    $1,
+
+                    $2,
+
+                    $3,
+
+                    $4,
+
+                    $5::jsonb,
+
+                    $6::jsonb,
+
+                    $7,
+
+                    $8,
+
+                    NOW()
+
+                )
+                `,
+
+                [
+
+                    adminUserId ||
+                    null,
+
+                    "USER_STATUS_CHANGED",
+
+                    "USER",
+
+                    currentUser.id,
+
+                    JSON.stringify({
+
+                        public_user_id:
+                            currentUser.public_user_id,
+
+                        account_status:
+                            currentUser.account_status
+
+                    }),
+
+                    JSON.stringify({
+
+                        account_status:
+                            normalizedStatus
+
+                    }),
+
+                    ipAddress ||
+                    null,
+
+                    userAgent ||
+                    null
+
+                ]
+
+            );
+
+        } catch (
+            auditError
+        ) {
+
+            console.warn(
+
+                "ADMIN USER STATUS AUDIT LOG ERROR:",
+
+                auditError.message
+
+            );
+
+        }
+
+
+        await client.query(
+            "COMMIT"
+        );
+
+
+        return updateResult.rows[0];
+
+
+    } catch (
+        error
     ) {
 
-        throw new Error(
-            "USER_NOT_FOUND"
-        );
+
+        try {
+
+            await client.query(
+                "ROLLBACK"
+            );
+
+        } catch (
+            rollbackError
+        ) {
+
+            console.error(
+
+                "ADMIN USER STATUS ROLLBACK ERROR:",
+
+                rollbackError
+
+            );
+
+        }
+
+
+        throw error;
+
+
+    } finally {
+
+        client.release();
 
     }
-
-
-    const currentUser =
-        currentResult.rows[0];
-
-
-    /*
-    ---------------------------------------------------------
-    Same status
-    ---------------------------------------------------------
-    */
-
-    const currentStatus =
-        String(
-
-            currentUser.account_status ||
-            ""
-
-        )
-        .trim()
-        .toLowerCase();
-
-
-    if (
-
-        currentStatus ===
-        normalizedStatus
-
-    ) {
-
-        throw new Error(
-            "STATUS_ALREADY_SET"
-        );
-
-    }
-
-
-    /*
-    ---------------------------------------------------------
-    Update
-    ---------------------------------------------------------
-    */
-
-    const result =
-        await pool.query(
-
-            `
-            UPDATE users
-
-            SET
-
-                account_status = $1
-
-
-            WHERE
-
-                id = $2
-
-
-            RETURNING
-
-                id,
-
-                public_user_id,
-
-                full_name,
-
-                email,
-
-                role,
-
-                account_status,
-
-                last_login_at,
-
-                created_at
-            `,
-
-            [
-
-                normalizedStatus,
-
-                userId
-
-            ]
-
-        );
-
-
-    /*
-    ---------------------------------------------------------
-    Return updated user
-    ---------------------------------------------------------
-    */
-
-    return result.rows[0];
 
 }
 
@@ -566,13 +1128,16 @@ async function updateUserStatus({
 |--------------------------------------------------------------------------
 */
 
-module.exports =
-    {
+module.exports = {
 
-        getUsers,
+    getUsers,
 
-        getUserDetails,
+    getUsersCount,
 
-        updateUserStatus
+    getUserDetails,
 
-    };
+    getUserByPublicUserId,
+
+    updateUserStatus
+
+};
