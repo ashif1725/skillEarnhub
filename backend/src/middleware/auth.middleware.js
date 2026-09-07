@@ -3,160 +3,219 @@
 const jwt = require("jsonwebtoken");
 
 /* =========================================================
+GET TOKEN FROM REQUEST
+========================================================= */
+
+function getTokenFromRequest(req) {
+const authorization = String(
+req.headers.authorization || ""
+).trim();
+
+```
+if (authorization.toLowerCase().startsWith("bearer ")) {
+    const token = authorization.slice(7).trim();
+
+    if (token) {
+        return token;
+    }
+}
+
+const cookieToken =
+    req.cookies?.token ||
+    req.cookies?.access_token ||
+    req.cookies?.accessToken ||
+    req.cookies?.skillearn_access_token ||
+    null;
+
+if (cookieToken) {
+    const token = String(cookieToken).trim();
+
+    if (token) {
+        return token;
+    }
+}
+
+return null;
+```
+
+}
+
+/* =========================================================
+EXTRACT USER ID
+========================================================= */
+
+function extractUserId(decoded) {
+if (!decoded || typeof decoded !== "object") {
+return null;
+}
+
+```
+const userId =
+    decoded.id ||
+    decoded.userId ||
+    decoded.user_id ||
+    decoded.sub ||
+    decoded.user?.id ||
+    decoded.user?.userId ||
+    decoded.user?.user_id ||
+    null;
+
+if (userId === null || userId === undefined) {
+    return null;
+}
+
+const normalizedUserId = String(userId).trim();
+
+return normalizedUserId || null;
+```
+
+}
+
+/* =========================================================
+BUILD AUTH USER
+========================================================= */
+
+function buildAuthUser(decoded, userId) {
+const nestedUser =
+decoded?.user &&
+typeof decoded.user === "object"
+? decoded.user
+: {};
+
+```
+return {
+    ...decoded,
+    ...nestedUser,
+    id: userId,
+    userId: userId,
+    user_id: userId
+};
+```
+
+}
+
+/* =========================================================
 AUTHENTICATION MIDDLEWARE
 ========================================================= */
 
-const protect = async (req, res, next) => {
+function requireAuth(req, res, next) {
+try {
+const token = getTokenFromRequest(req);
 
 ```
-try {
-
-    const authorizationHeader =
-        req.headers.authorization;
-
-
-    /* =================================================
-       CHECK AUTHORIZATION HEADER
-    ================================================= */
-
-    if (
-        !authorizationHeader ||
-        !authorizationHeader.startsWith("Bearer ")
-    ) {
-
+    if (!token) {
         return res.status(401).json({
-
             success: false,
-
-            message:
-                "Not authorized. No authentication token provided."
-
+            error: "UNAUTHORIZED",
+            message: "Authentication token is required."
         });
-
     }
 
+    const secret = process.env.JWT_SECRET;
 
-    /* =================================================
-       EXTRACT TOKEN
-    ================================================= */
-
-    const token =
-        authorizationHeader
-            .split(" ")[1];
-
-
-    if (
-        !token
-    ) {
-
-        return res.status(401).json({
-
-            success: false,
-
-            message:
-                "Not authorized. Invalid authentication token."
-
-        });
-
-    }
-
-
-    /* =================================================
-       CHECK JWT SECRET
-    ================================================= */
-
-    if (
-        !process.env.JWT_SECRET
-    ) {
-
+    if (!secret) {
         console.error(
-            "JWT_SECRET environment variable is missing."
+            "JWT_SECRET is missing from environment variables."
         );
-
 
         return res.status(500).json({
-
             success: false,
-
-            message:
-                "Server authentication configuration error."
-
+            error: "SERVER_CONFIGURATION_ERROR",
+            message: "Authentication service is not configured."
         });
-
     }
 
+    const decoded = jwt.verify(token, secret);
 
-    /* =================================================
-       VERIFY TOKEN
-    ================================================= */
+    const userId = extractUserId(decoded);
 
-    const decoded =
-        jwt.verify(
+    if (!userId) {
+        return res.status(401).json({
+            success: false,
+            error: "INVALID_TOKEN",
+            message:
+                "Authentication token does not contain a valid user ID."
+        });
+    }
 
-            token,
-
-            process.env.JWT_SECRET
-
-        );
-
-
-    /* =================================================
-       ATTACH USER TO REQUEST
-    ================================================= */
-
-    req.user =
-        decoded;
-
+    req.user = buildAuthUser(decoded, userId);
 
     return next();
 
-
 } catch (error) {
-
     console.error(
-
-        "JWT verification failed:",
-
+        "AUTH MIDDLEWARE ERROR:",
         error.message
-
     );
 
+    if (error.name === "TokenExpiredError") {
+        return res.status(401).json({
+            success: false,
+            error: "TOKEN_EXPIRED",
+            message:
+                "Your session has expired. Please login again."
+        });
+    }
 
     return res.status(401).json({
-
         success: false,
-
-        message:
-            "Not authorized. Token is invalid or expired."
-
+        error: "INVALID_TOKEN",
+        message: "Invalid authentication token."
     });
-
 }
 ```
 
-};
+}
+
+/* =========================================================
+OPTIONAL AUTHENTICATION
+========================================================= */
+
+function optionalAuth(req, res, next) {
+const token = getTokenFromRequest(req);
+
+```
+if (!token || !process.env.JWT_SECRET) {
+    return next();
+}
+
+try {
+    const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET
+    );
+
+    const userId = extractUserId(decoded);
+
+    if (userId) {
+        req.user = buildAuthUser(
+            decoded,
+            userId
+        );
+    }
+} catch (error) {
+    // Optional authentication does not block public requests.
+}
+
+return next();
+```
+
+}
 
 /* =========================================================
 EXPORTS
-
-Supports both:
-
-const protect = require(...)
-
-and
-
-const { protect } = require(...)
-
-and
-
-const { requireAuth } = require(...)
 ========================================================= */
 
-module.exports =
-protect;
+module.exports = requireAuth;
 
-module.exports.protect =
-protect;
+module.exports.protect = requireAuth;
 
-module.exports.requireAuth =
-protect;
+module.exports.requireAuth = requireAuth;
+
+module.exports.optionalAuth = optionalAuth;
+
+module.exports.getTokenFromRequest =
+getTokenFromRequest;
+
+module.exports.extractUserId =
+extractUserId;
