@@ -2,10 +2,6 @@
 
 const jwt = require("jsonwebtoken");
 
-/* =========================================================
-GET TOKEN FROM REQUEST
-========================================================= */
-
 function getTokenFromRequest(req) {
 const authorization = String(
 req.headers.authorization || ""
@@ -40,10 +36,6 @@ return null;
 
 }
 
-/* =========================================================
-EXTRACT USER ID
-========================================================= */
-
 function extractUserId(decoded) {
 if (!decoded || typeof decoded !== "object") {
 return null;
@@ -71,10 +63,6 @@ return normalizedUserId || null;
 
 }
 
-/* =========================================================
-BUILD AUTH USER
-========================================================= */
-
 function buildAuthUser(decoded, userId) {
 const nestedUser =
 decoded?.user &&
@@ -93,10 +81,6 @@ return {
 ```
 
 }
-
-/* =========================================================
-AUTHENTICATION MIDDLEWARE
-========================================================= */
 
 function requireAuth(req, res, next) {
 try {
@@ -167,10 +151,6 @@ const token = getTokenFromRequest(req);
 
 }
 
-/* =========================================================
-OPTIONAL AUTHENTICATION
-========================================================= */
-
 function optionalAuth(req, res, next) {
 const token = getTokenFromRequest(req);
 
@@ -194,7 +174,7 @@ try {
         );
     }
 } catch (error) {
-    // Optional authentication does not block public requests.
+    // Optional authentication intentionally does not block.
 }
 
 return next();
@@ -202,20 +182,10 @@ return next();
 
 }
 
-/* =========================================================
-EXPORTS
-========================================================= */
-
 module.exports = requireAuth;
 
 module.exports.protect = requireAuth;
-
 module.exports.requireAuth = requireAuth;
-
 module.exports.optionalAuth = optionalAuth;
-
-module.exports.getTokenFromRequest =
-getTokenFromRequest;
-
-module.exports.extractUserId =
-extractUserId;
+module.exports.getTokenFromRequest = getTokenFromRequest;
+module.exports.extractUserId = extractUserId;
