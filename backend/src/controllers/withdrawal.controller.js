@@ -76,13 +76,16 @@ function getAuthenticatedAdminId(
 
 
     if (
-        role !== "admin" &&
-        role !== "administrator"
-    ) {
+![
+"admin",
+"administrator",
+"super_admin",
+"superadmin"
+].includes(role)
+) {
+return null;
+}
 
-        return null;
-
-    }
 
 
     /*
