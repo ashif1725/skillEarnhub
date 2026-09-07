@@ -17,55 +17,40 @@ authMiddleware.protect ||
 authMiddleware;
 
 if (typeof requireAuth !== "function") {
-
-```
 throw new Error(
-    "Wallet routes failed to load: requireAuth middleware is not exported correctly."
+"Wallet routes failed to load: authentication middleware is not exported correctly."
 );
-```
-
 }
 
 /* =========================================================
 WALLET CONTROLLER VALIDATION
 ========================================================= */
 
-if (
-!walletController ||
-typeof walletController !== "object"
-) {
-
-```
+if (!walletController || typeof walletController !== "object") {
 throw new Error(
-    "Wallet routes failed to load: wallet.controller.js is not exported correctly."
+"Wallet routes failed to load: wallet.controller.js is not exported correctly."
 );
-```
-
 }
 
-const {
-getWallet,
-addFunds,
-withdrawFunds,
-getTransactionHistory
-} = walletController;
+const getWallet = walletController.getWallet;
+const addFunds = walletController.addFunds;
+const withdrawFunds = walletController.withdrawFunds;
+const getTransactionHistory =
+walletController.getTransactionHistory;
 
 /* =========================================================
-REQUIRE CONTROLLER
+CONTROLLER VALIDATOR
 ========================================================= */
 
-function requireController(
-controller,
-name
-) {
+function requireController(controller, name) {
 
 ```
-if (
-    typeof controller !== "function"
-) {
+if (typeof controller !== "function") {
 
     throw new Error(
-        `Wallet controller "${name}" is missing or is not a function.`
+        "Wallet controller " +
+        name +
+        " is missing or is not a function."
     );
 
 }
