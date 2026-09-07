@@ -1,17 +1,72 @@
 "use strict";
 
 
+/*
+|--------------------------------------------------------------------------
+| SESSION SERVICE
+|--------------------------------------------------------------------------
+*/
+
 const {
+
     getSession
-} = require(
-    "../services/session.service"
-);
+
+} =
+    require(
+        "../services/session.service"
+    );
+
+
+/*
+|--------------------------------------------------------------------------
+| NORMALIZE TOKEN
+|--------------------------------------------------------------------------
+*/
+
+function normalizeToken(
+    value
+) {
+
+    if (
+        value ===
+        undefined
+
+        ||
+
+        value ===
+        null
+    ) {
+
+        return null;
+
+    }
+
+
+    const token =
+        String(
+            value
+        )
+        .trim();
+
+
+    return token ||
+        null;
+
+}
 
 
 /*
 |--------------------------------------------------------------------------
 | GET AUTH TOKEN
 |--------------------------------------------------------------------------
+|
+| Priority:
+|
+| 1. Authorization: Bearer TOKEN
+| 2. skillearn_session cookie
+| 3. access_token cookie
+| 4. token cookie
+|
 */
 
 function getAuthToken(
@@ -19,68 +74,141 @@ function getAuthToken(
 ) {
 
     const authorization =
-        String(
+        normalizeToken(
+
             req.get(
                 "authorization"
-            ) ||
-            ""
-        )
-        .trim();
+            )
+
+        );
 
 
     if (
-
         authorization
-            .toLowerCase()
-            .startsWith(
-                "bearer "
-            )
-
     ) {
 
-        const token =
-            authorization
-                .slice(7)
-                .trim();
+        const match =
+            authorization.match(
+                /^Bearer\s+(.+)$/i
+            );
 
 
         if (
-            token
+            match &&
+            match[1]
         ) {
 
-            return token;
+            const bearerToken =
+                normalizeToken(
+                    match[1]
+                );
+
+
+            if (
+                bearerToken
+            ) {
+
+                return bearerToken;
+
+            }
 
         }
 
     }
 
 
-    return (
+    const cookieSession =
+        normalizeToken(
+            req.cookies?.skillearn_session
+        );
 
-        req.cookies?.skillearn_session ||
 
-        req.cookies?.access_token ||
+    if (
+        cookieSession
+    ) {
 
-        req.cookies?.token ||
+        return cookieSession;
 
-        null
+    }
 
-    );
+
+    const accessToken =
+        normalizeToken(
+            req.cookies?.access_token
+        );
+
+
+    if (
+        accessToken
+    ) {
+
+        return accessToken;
+
+    }
+
+
+    const token =
+        normalizeToken(
+            req.cookies?.token
+        );
+
+
+    if (
+        token
+    ) {
+
+        return token;
+
+    }
+
+
+    return null;
 
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| CREATE AUTH USER
+| CREATE AUTHENTICATED USER
 |--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| Internal user ID must remain:
+|
+| session.user_id
+|
+| This is the UUID used by:
+|
+| users.id
+| wallets.user_id
+|
+| Public user ID must NEVER replace the internal UUID
+| for database wallet queries.
+|
 */
 
 function createAuthenticatedUser(
     session
 ) {
 
-    if (!session) {
+    if (
+        !session
+    ) {
+
+        return null;
+
+    }
+
+
+    const userId =
+        session.user_id ||
+        null;
+
+
+    if (
+        !userId
+    ) {
 
         return null;
 
@@ -89,58 +217,179 @@ function createAuthenticatedUser(
 
     return {
 
+        /*
+        ------------------------------------------------------
+        INTERNAL DATABASE USER ID
+        ------------------------------------------------------
+        */
+
         id:
-            session.user_id,
+            userId,
 
         userId:
-            session.user_id,
+            userId,
 
         user_id:
-            session.user_id,
+            userId,
+
+
+        /*
+        ------------------------------------------------------
+        PUBLIC USER ID
+        ------------------------------------------------------
+        */
 
         publicUserId:
-            session.public_user_id,
+
+            session.public_user_id ||
+            null,
 
         public_user_id:
-            session.public_user_id,
+
+            session.public_user_id ||
+            null,
+
+
+        /*
+        ------------------------------------------------------
+        USER INFORMATION
+        ------------------------------------------------------
+        */
 
         fullName:
-            session.full_name,
+
+            session.full_name ||
+            null,
 
         full_name:
-            session.full_name,
+
+            session.full_name ||
+            null,
 
         name:
-            session.full_name,
+
+            session.full_name ||
+            null,
+
 
         email:
-            session.email,
+
+            session.email ||
+            null,
+
 
         phone:
-            session.phone,
+
+            session.phone ||
+            null,
+
+
+        /*
+        ------------------------------------------------------
+        ROLE
+        ------------------------------------------------------
+        */
 
         role:
 
             String(
+
                 session.role ||
                 "user"
+
             )
             .trim()
             .toLowerCase(),
 
+
+        /*
+        ------------------------------------------------------
+        ACCOUNT STATUS
+        ------------------------------------------------------
+        */
+
         accountStatus:
-            session.account_status,
+
+            session.account_status ||
+            null,
 
         account_status:
-            session.account_status,
+
+            session.account_status ||
+            null,
+
+
+        /*
+        ------------------------------------------------------
+        EMAIL VERIFICATION
+        ------------------------------------------------------
+        */
 
         emailVerifiedAt:
-            session.email_verified_at,
+
+            session.email_verified_at ||
+            null,
 
         email_verified_at:
-            session.email_verified_at
+
+            session.email_verified_at ||
+            null
 
     };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| ATTACH AUTHENTICATED SESSION
+|--------------------------------------------------------------------------
+*/
+
+function attachAuthenticatedSession(
+    req,
+    session
+) {
+
+    const user =
+        createAuthenticatedUser(
+            session
+        );
+
+
+    if (
+        !user
+    ) {
+
+        return false;
+
+    }
+
+
+    req.user =
+        user;
+
+
+    req.session =
+        session;
+
+
+    req.auth = {
+
+        sessionId:
+
+            session.session_id ||
+            null,
+
+        expiresAt:
+
+            session.expires_at ||
+            null
+
+    };
+
+
+    return true;
 
 }
 
@@ -159,13 +408,22 @@ async function requireAuth(
 
     try {
 
+
+        /*
+        ------------------------------------------------------
+        GET TOKEN
+        ------------------------------------------------------
+        */
+
         const token =
             getAuthToken(
                 req
             );
 
 
-        if (!token) {
+        if (
+            !token
+        ) {
 
             return res.status(401).json({
 
@@ -183,13 +441,21 @@ async function requireAuth(
         }
 
 
+        /*
+        ------------------------------------------------------
+        LOAD SESSION
+        ------------------------------------------------------
+        */
+
         const session =
             await getSession(
                 token
             );
 
 
-        if (!session) {
+        if (
+            !session
+        ) {
 
             return res.status(401).json({
 
@@ -207,37 +473,55 @@ async function requireAuth(
         }
 
 
-        const user =
-            createAuthenticatedUser(
+        /*
+        ------------------------------------------------------
+        ATTACH USER
+        ------------------------------------------------------
+        */
+
+        const attached =
+            attachAuthenticatedSession(
+
+                req,
+
                 session
+
             );
 
 
-        req.user =
-            user;
+        if (
+            !attached
+        ) {
+
+            return res.status(401).json({
+
+                success:
+                    false,
+
+                error:
+                    "INVALID_SESSION",
+
+                message:
+                    "Authenticated user information is invalid."
+
+            });
+
+        }
 
 
-        req.session =
-            session;
-
-
-        req.auth = {
-
-            sessionId:
-                session.session_id ||
-                null,
-
-            expiresAt:
-                session.expires_at ||
-                null
-
-        };
-
+        /*
+        ------------------------------------------------------
+        CONTINUE
+        ------------------------------------------------------
+        */
 
         return next();
 
 
-    } catch (error) {
+    } catch (
+        error
+    ) {
+
 
         console.error(
             "AUTH MIDDLEWARE ERROR:",
@@ -258,6 +542,7 @@ async function requireAuth(
 
         });
 
+
     }
 
 }
@@ -275,7 +560,9 @@ function requireAdmin(
     next
 ) {
 
-    if (!req.user) {
+    if (
+        !req.user
+    ) {
 
         return res.status(401).json({
 
@@ -283,7 +570,10 @@ function requireAdmin(
                 false,
 
             error:
-                "AUTHENTICATION_REQUIRED"
+                "AUTHENTICATION_REQUIRED",
+
+            message:
+                "Authentication required."
 
         });
 
@@ -292,8 +582,10 @@ function requireAdmin(
 
     const role =
         String(
+
             req.user.role ||
             "user"
+
         )
         .trim()
         .toLowerCase();
@@ -301,9 +593,13 @@ function requireAdmin(
 
     if (
 
-        role !== "admin" &&
+        role !==
+        "admin"
 
-        role !== "administrator"
+        &&
+
+        role !==
+        "administrator"
 
     ) {
 
@@ -342,13 +638,16 @@ async function optionalAuth(
 
     try {
 
+
         const token =
             getAuthToken(
                 req
             );
 
 
-        if (!token) {
+        if (
+            !token
+        ) {
 
             return next();
 
@@ -361,40 +660,30 @@ async function optionalAuth(
             );
 
 
-        if (!session) {
+        if (
+            !session
+        ) {
 
             return next();
 
         }
 
 
-        req.user =
-            createAuthenticatedUser(
-                session
-            );
+        attachAuthenticatedSession(
 
+            req,
 
-        req.session =
-            session;
+            session
 
-
-        req.auth = {
-
-            sessionId:
-                session.session_id ||
-                null,
-
-            expiresAt:
-                session.expires_at ||
-                null
-
-        };
+        );
 
 
         return next();
 
 
-    } catch (error) {
+    } catch (
+        error
+    ) {
 
         return next();
 
@@ -402,6 +691,12 @@ async function optionalAuth(
 
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| EXPORTS
+|--------------------------------------------------------------------------
+*/
 
 module.exports = {
 
