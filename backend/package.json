@@ -1,15 +1,15 @@
 {
   "name": "skillearn-hub-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "dev": "node --watch server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node --check server.js && find src -name '*.js' ! -path 'src/routes/admin-deposit-requests.js' -print0 | xargs -0 -n1 node --check"
   },
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": { "node": ">=20" },
   "dependencies": {
     "argon2": "^0.41.1",
     "cookie-parser": "^1.4.7",
