@@ -9,163 +9,91 @@ const pool =
 
 /*
 |--------------------------------------------------------------------------
-| CONSTANTS
+| RESOLVE USER ID
 |--------------------------------------------------------------------------
+|
+| This function accepts:
+|
+| - users.id UUID
+| - public_user_id
+| - email
+|
+| and always resolves the real users.id UUID.
+|
+| This prevents wallet queries from failing when auth middleware
+| provides a public user ID instead of the internal UUID.
+|
 */
 
-const DEFAULT_CURRENCY =
-    "INR";
-
-
-const DEFAULT_WALLET_STATUS =
-    "active";
-
-
-const DEFAULT_TRANSACTION_LIMIT =
-    50;
-
-
-const MAX_TRANSACTION_LIMIT =
-    100;
-
-
-/*
-|--------------------------------------------------------------------------
-| NORMALIZE NUMBER
-|--------------------------------------------------------------------------
-*/
-
-function toSafeNumber(
-    value
+async function resolveUserId(
+    userIdentifier
 ) {
 
-    const numberValue =
-        Number(
-            value
-        );
-
-
     if (
-        !Number.isFinite(
-            numberValue
+        !userIdentifier
+    ) {
+
+        const error =
+            new Error(
+                "Authenticated user ID is missing."
+            );
+
+
+        error.code =
+            "AUTH_USER_ID_MISSING";
+
+
+        throw error;
+
+    }
+
+
+    const value =
+        String(
+            userIdentifier
         )
-    ) {
-
-        return 0;
-
-    }
-
-
-    return numberValue;
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| NORMALIZE LIMIT
-|--------------------------------------------------------------------------
-*/
-
-function normalizeLimit(
-    limit
-) {
-
-    let safeLimit =
-        Number(
-            limit
-        );
-
-
-    if (
-
-        !Number.isInteger(
-            safeLimit
-        )
-
-        ||
-
-        safeLimit <= 0
-
-    ) {
-
-        safeLimit =
-            DEFAULT_TRANSACTION_LIMIT;
-
-    }
-
-
-    if (
-        safeLimit >
-        MAX_TRANSACTION_LIMIT
-    ) {
-
-        safeLimit =
-            MAX_TRANSACTION_LIMIT;
-
-    }
-
-
-    return safeLimit;
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| GET USER WALLET ROW
-|--------------------------------------------------------------------------
-*/
-
-async function findWalletByUserId(
-    client,
-    userId,
-    lock = false
-) {
-
-    const lockClause =
-        lock
-
-            ?
-
-            "FOR UPDATE"
-
-            :
-
-            "";
+        .trim();
 
 
     const result =
-        await client.query(
+        await pool.query(
 
             `
             SELECT
 
-                id,
+                u.id,
 
-                user_id,
+                u.public_user_id,
 
-                currency,
+                u.email,
 
-                status,
+                u.full_name
 
-                created_at
-
-            FROM wallets
+            FROM users u
 
             WHERE
-                user_id = $1
 
-            ORDER BY
-                created_at ASC
+                CAST(
+                    u.id AS TEXT
+                ) = $1
+
+                OR
+
+                u.public_user_id = $1
+
+                OR
+
+                LOWER(
+                    u.email
+                ) = LOWER(
+                    $1
+                )
 
             LIMIT 1
-
-            ${lockClause}
             `,
 
             [
-                userId
+                value
             ]
 
         );
@@ -175,7 +103,17 @@ async function findWalletByUserId(
         result.rowCount === 0
     ) {
 
-        return null;
+        const error =
+            new Error(
+                "Authenticated user was not found."
+            );
+
+
+        error.code =
+            "USER_NOT_FOUND";
+
+
+        throw error;
 
     }
 
@@ -187,29 +125,16 @@ async function findWalletByUserId(
 
 /*
 |--------------------------------------------------------------------------
-| GET WALLET BALANCE ROW
+| ENSURE WALLET BALANCE
 |--------------------------------------------------------------------------
 */
 
-async function findWalletBalance(
+async function ensureWalletBalance(
     client,
-    walletId,
-    lock = false
+    wallet
 ) {
 
-    const lockClause =
-        lock
-
-            ?
-
-            "FOR UPDATE"
-
-            :
-
-            "";
-
-
-    const result =
+    const existingResult =
         await client.query(
 
             `
@@ -221,56 +146,34 @@ async function findWalletBalance(
 
                 pending_balance,
 
-                currency,
-
-                created_at,
-
-                updated_at
+                currency
 
             FROM wallet_balances
 
-            WHERE
-                wallet_id = $1
+            WHERE wallet_id = $1
 
             LIMIT 1
 
-            ${lockClause}
+            FOR UPDATE
             `,
 
             [
-                walletId
+                wallet.id
             ]
 
         );
 
 
     if (
-        result.rowCount === 0
+        existingResult.rowCount > 0
     ) {
 
-        return null;
+        return existingResult.rows[0];
 
     }
 
 
-    return result.rows[0];
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| CREATE WALLET BALANCE
-|--------------------------------------------------------------------------
-*/
-
-async function createWalletBalance(
-    client,
-    walletId,
-    currency
-) {
-
-    const result =
+    const createResult =
         await client.query(
 
             `
@@ -298,6 +201,16 @@ async function createWalletBalance(
 
             )
 
+            ON CONFLICT (
+                wallet_id
+            )
+
+            DO UPDATE
+
+            SET
+                wallet_id =
+                    EXCLUDED.wallet_id
+
             RETURNING
 
                 wallet_id,
@@ -306,412 +219,22 @@ async function createWalletBalance(
 
                 pending_balance,
 
-                currency,
-
-                created_at,
-
-                updated_at
+                currency
             `,
 
             [
-
-                walletId,
-
-                currency ||
-                DEFAULT_CURRENCY
-
-            ]
-
-        );
-
-
-    return result.rows[0];
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| ENSURE WALLET BALANCE
-|--------------------------------------------------------------------------
-|
-| This function is important for old users.
-|
-| If wallet exists but wallet_balances row is missing,
-| create the balance row automatically.
-|--------------------------------------------------------------------------
-*/
-
-async function ensureWalletBalance(
-    client,
-    wallet,
-    lock = false
-) {
-
-    let balance =
-        await findWalletBalance(
-
-            client,
-
-            wallet.id,
-
-            lock
-
-        );
-
-
-    if (
-        balance
-    ) {
-
-        return balance;
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    CREATE MISSING BALANCE ROW
-    ----------------------------------------------------------
-    */
-
-    try {
-
-        balance =
-            await createWalletBalance(
-
-                client,
 
                 wallet.id,
 
                 wallet.currency ||
-                DEFAULT_CURRENCY
+                "INR"
 
-            );
-
-    } catch (
-        error
-    ) {
-
-        /*
-        ------------------------------------------------------
-        Another request may have created the row.
-        Re-read it.
-        ------------------------------------------------------
-        */
-
-        if (
-
-            error
-
-            &&
-
-            error.code ===
-            "23505"
-
-        ) {
-
-            balance =
-                await findWalletBalance(
-
-                    client,
-
-                    wallet.id,
-
-                    lock
-
-                );
-
-
-            if (
-                balance
-            ) {
-
-                return balance;
-
-            }
-
-        }
-
-
-        throw error;
-
-    }
-
-
-    return balance;
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| ENSURE USER WALLET
-|--------------------------------------------------------------------------
-|
-| This protects older accounts where:
-|
-| users row exists
-|
-| but wallet creation did not happen
-|
-| OR
-|
-| wallet exists but wallet_balances row is missing.
-|--------------------------------------------------------------------------
-*/
-
-async function ensureUserWallet(
-    client,
-    userId,
-    options = {}
-) {
-
-    const lock =
-        Boolean(
-            options.lock
-        );
-
-
-    let wallet =
-        await findWalletByUserId(
-
-            client,
-
-            userId,
-
-            lock
-
-        );
-
-
-    /*
-    ----------------------------------------------------------
-    WALLET EXISTS
-    ----------------------------------------------------------
-    */
-
-    if (
-        wallet
-    ) {
-
-        const balance =
-            await ensureWalletBalance(
-
-                client,
-
-                wallet,
-
-                lock
-
-            );
-
-
-        return {
-
-            wallet,
-
-            balance
-
-        };
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    WALLET DOES NOT EXIST
-    ----------------------------------------------------------
-    |
-    | We first verify that the user exists.
-    ----------------------------------------------------------
-    */
-
-    const userResult =
-        await client.query(
-
-            `
-            SELECT
-
-                id
-
-            FROM users
-
-            WHERE
-                id = $1
-
-            LIMIT 1
-            `,
-
-            [
-                userId
             ]
 
         );
 
 
-    if (
-        userResult.rowCount === 0
-    ) {
-
-        const error =
-            new Error(
-                "User not found."
-            );
-
-
-        error.code =
-            "USER_NOT_FOUND";
-
-
-        throw error;
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    CREATE WALLET
-    ----------------------------------------------------------
-    */
-
-    try {
-
-        const walletResult =
-            await client.query(
-
-                `
-                INSERT INTO wallets (
-
-                    user_id,
-
-                    currency,
-
-                    status
-
-                )
-
-                VALUES (
-
-                    $1,
-
-                    $2,
-
-                    $3
-
-                )
-
-                RETURNING
-
-                    id,
-
-                    user_id,
-
-                    currency,
-
-                    status,
-
-                    created_at
-                `,
-
-                [
-
-                    userId,
-
-                    DEFAULT_CURRENCY,
-
-                    DEFAULT_WALLET_STATUS
-
-                ]
-
-            );
-
-
-        wallet =
-            walletResult.rows[0];
-
-
-    } catch (
-        error
-    ) {
-
-        /*
-        ------------------------------------------------------
-        Another request may have created wallet.
-        ------------------------------------------------------
-        */
-
-        if (
-
-            error
-
-            &&
-
-            error.code ===
-            "23505"
-
-        ) {
-
-            wallet =
-                await findWalletByUserId(
-
-                    client,
-
-                    userId,
-
-                    lock
-
-                );
-
-        }
-
-        else {
-
-            throw error;
-
-        }
-
-    }
-
-
-    if (
-        !wallet
-    ) {
-
-        const error =
-            new Error(
-                "Unable to create or load wallet."
-            );
-
-
-        error.code =
-            "WALLET_INITIALIZATION_FAILED";
-
-
-        throw error;
-
-    }
-
-
-    const balance =
-        await ensureWalletBalance(
-
-            client,
-
-            wallet,
-
-            lock
-
-        );
-
-
-    return {
-
-        wallet,
-
-        balance
-
-    };
+    return createResult.rows[0];
 
 }
 
@@ -723,21 +246,81 @@ async function ensureUserWallet(
 */
 
 async function getWallet(
-    userId
+    userIdentifier
 ) {
 
+
+    /*
+    ----------------------------------------------------------
+    Resolve the actual internal users.id first.
+    ----------------------------------------------------------
+    */
+
+    const user =
+        await resolveUserId(
+            userIdentifier
+        );
+
+
+    const result =
+        await pool.query(
+
+            `
+            SELECT
+
+                w.id AS wallet_id,
+
+                w.user_id,
+
+                w.currency,
+
+                w.status,
+
+                COALESCE(
+                    wb.available_balance,
+                    0
+                ) AS available_balance,
+
+                COALESCE(
+                    wb.pending_balance,
+                    0
+                ) AS pending_balance
+
+            FROM wallets w
+
+            LEFT JOIN wallet_balances wb
+
+                ON wb.wallet_id =
+                    w.id
+
+            WHERE
+
+                w.user_id = $1
+
+            LIMIT 1
+            `,
+
+            [
+
+                user.id
+
+            ]
+
+        );
+
+
     if (
-        !userId
+        result.rowCount === 0
     ) {
 
         const error =
             new Error(
-                "User ID is required."
+                "Wallet not found for this user."
             );
 
 
         error.code =
-            "INVALID_USER_ID";
+            "WALLET_NOT_FOUND";
 
 
         throw error;
@@ -745,136 +328,36 @@ async function getWallet(
     }
 
 
-    const client =
-        await pool.connect();
+    const wallet =
+        result.rows[0];
 
 
-    try {
+    return {
 
-        /*
-        ------------------------------------------------------
-        START TRANSACTION
-        ------------------------------------------------------
-        */
+        wallet_id:
+            wallet.wallet_id,
 
-        await client.query(
-            "BEGIN"
-        );
+        user_id:
+            wallet.user_id,
 
+        currency:
+            wallet.currency ||
+            "INR",
 
-        /*
-        ------------------------------------------------------
-        ENSURE WALLET + BALANCE
-        ------------------------------------------------------
-        */
+        status:
+            wallet.status,
 
-        const result =
-            await ensureUserWallet(
+        available_balance:
+            Number(
+                wallet.available_balance
+            ) || 0,
 
-                client,
+        pending_balance:
+            Number(
+                wallet.pending_balance
+            ) || 0
 
-                userId,
-
-                {
-
-                    lock:
-                        false
-
-                }
-
-            );
-
-
-        const wallet =
-            result.wallet;
-
-
-        const balance =
-            result.balance;
-
-
-        /*
-        ------------------------------------------------------
-        COMMIT
-        ------------------------------------------------------
-        */
-
-        await client.query(
-            "COMMIT"
-        );
-
-
-        return {
-
-            wallet_id:
-                wallet.id,
-
-            user_id:
-                wallet.user_id,
-
-            currency:
-                wallet.currency ||
-                balance.currency ||
-                DEFAULT_CURRENCY,
-
-            status:
-                wallet.status,
-
-            available_balance:
-                toSafeNumber(
-                    balance.available_balance
-                ),
-
-            pending_balance:
-                toSafeNumber(
-                    balance.pending_balance
-                )
-
-        };
-
-
-    } catch (
-        error
-    ) {
-
-        try {
-
-            await client.query(
-                "ROLLBACK"
-            );
-
-        } catch (
-            rollbackError
-        ) {
-
-            console.error(
-
-                "GET WALLET ROLLBACK ERROR:",
-
-                rollbackError
-
-            );
-
-        }
-
-
-        console.error(
-
-            "GET WALLET SERVICE ERROR:",
-
-            error
-
-        );
-
-
-        throw error;
-
-
-    } finally {
-
-        client.release();
-
-    }
+    };
 
 }
 
@@ -886,33 +369,55 @@ async function getWallet(
 */
 
 async function getTransactions(
-    userId,
+    userIdentifier,
     limit
 ) {
 
+
+    /*
+    ----------------------------------------------------------
+    Resolve authenticated user.
+    ----------------------------------------------------------
+    */
+
+    const user =
+        await resolveUserId(
+            userIdentifier
+        );
+
+
+    let safeLimit =
+        Number(
+            limit
+        );
+
+
     if (
-        !userId
+
+        !Number.isInteger(
+            safeLimit
+        )
+
+        ||
+
+        safeLimit <= 0
+
     ) {
 
-        const error =
-            new Error(
-                "User ID is required."
-            );
-
-
-        error.code =
-            "INVALID_USER_ID";
-
-
-        throw error;
+        safeLimit =
+            50;
 
     }
 
 
-    const safeLimit =
-        normalizeLimit(
-            limit
-        );
+    if (
+        safeLimit > 100
+    ) {
+
+        safeLimit =
+            100;
+
+    }
 
 
     const result =
@@ -945,24 +450,23 @@ async function getTransactions(
 
             INNER JOIN wallets w
 
-                ON
-                    w.id =
+                ON w.id =
                     wt.wallet_id
 
             WHERE
+
                 w.user_id = $1
 
             ORDER BY
-                wt.created_at DESC,
 
-                wt.id DESC
+                wt.created_at DESC
 
             LIMIT $2
             `,
 
             [
 
-                userId,
+                user.id,
 
                 safeLimit
 
@@ -971,7 +475,26 @@ async function getTransactions(
         );
 
 
-    return result.rows;
+    return result.rows.map(
+
+        function (
+            transaction
+        ) {
+
+            return {
+
+                ...transaction,
+
+                amount:
+                    Number(
+                        transaction.amount
+                    ) || 0
+
+            };
+
+        }
+
+    );
 
 }
 
@@ -996,61 +519,12 @@ async function sendMoney({
 
 }) {
 
+
     const numericAmount =
         Number(
             amount
         );
 
-
-    /*
-    ----------------------------------------------------------
-    VALIDATE USER IDS
-    ----------------------------------------------------------
-    */
-
-    if (
-        !senderUserId
-    ) {
-
-        const error =
-            new Error(
-                "Sender user ID is required."
-            );
-
-
-        error.code =
-            "INVALID_SENDER_USER_ID";
-
-
-        throw error;
-
-    }
-
-
-    if (
-        !receiverUserId
-    ) {
-
-        const error =
-            new Error(
-                "Receiver user ID is required."
-            );
-
-
-        error.code =
-            "INVALID_RECEIVER_USER_ID";
-
-
-        throw error;
-
-    }
-
-
-    /*
-    ----------------------------------------------------------
-    VALIDATE AMOUNT
-    ----------------------------------------------------------
-    */
 
     if (
 
@@ -1081,20 +555,32 @@ async function sendMoney({
 
     /*
     ----------------------------------------------------------
-    PREVENT SELF TRANSFER
+    Resolve both users to internal UUID values.
     ----------------------------------------------------------
     */
+
+    const senderUser =
+        await resolveUserId(
+            senderUserId
+        );
+
+
+    const receiverUser =
+        await resolveUserId(
+            receiverUserId
+        );
+
 
     if (
 
         String(
-            senderUserId
+            senderUser.id
         )
 
         ===
 
         String(
-            receiverUserId
+            receiverUser.id
         )
 
     ) {
@@ -1127,57 +613,146 @@ async function sendMoney({
 
         /*
         ------------------------------------------------------
-        ENSURE BOTH WALLETS
+        Lock both wallets.
         ------------------------------------------------------
         */
 
-        const senderData =
-            await ensureUserWallet(
+        const walletsResult =
+            await client.query(
 
-                client,
+                `
+                SELECT
 
-                senderUserId,
+                    id,
 
-                {
+                    user_id,
 
-                    lock:
-                        true
+                    currency,
 
-                }
+                    status
+
+                FROM wallets
+
+                WHERE
+
+                    user_id = ANY(
+                        $1::uuid[]
+                    )
+
+                ORDER BY
+                    id
+
+                FOR UPDATE
+                `,
+
+                [
+
+                    [
+
+                        senderUser.id,
+
+                        receiverUser.id
+
+                    ]
+
+                ]
 
             );
 
 
-        const receiverData =
-            await ensureUserWallet(
+        if (
+            walletsResult.rowCount !== 2
+        ) {
 
-                client,
+            const error =
+                new Error(
+                    "Sender or receiver wallet was not found."
+                );
 
-                receiverUserId,
 
-                {
+            error.code =
+                "WALLET_NOT_FOUND";
 
-                    lock:
-                        true
 
-                }
+            throw error;
 
-            );
+        }
 
 
         const senderWallet =
-            senderData.wallet;
+            walletsResult.rows.find(
+
+                function (
+                    wallet
+                ) {
+
+                    return (
+
+                        String(
+                            wallet.user_id
+                        )
+
+                        ===
+
+                        String(
+                            senderUser.id
+                        )
+
+                    );
+
+                }
+
+            );
 
 
         const receiverWallet =
-            receiverData.wallet;
+            walletsResult.rows.find(
+
+                function (
+                    wallet
+                ) {
+
+                    return (
+
+                        String(
+                            wallet.user_id
+                        )
+
+                        ===
+
+                        String(
+                            receiverUser.id
+                        )
+
+                    );
+
+                }
+
+            );
 
 
-        /*
-        ------------------------------------------------------
-        CHECK WALLET STATUS
-        ------------------------------------------------------
-        */
+        if (
+
+            !senderWallet ||
+
+            !receiverWallet
+
+        ) {
+
+            const error =
+                new Error(
+                    "Wallet ownership could not be verified."
+                );
+
+
+            error.code =
+                "WALLET_OWNER_MISMATCH";
+
+
+            throw error;
+
+        }
+
 
         if (
 
@@ -1188,7 +763,7 @@ async function sendMoney({
 
             !==
 
-            DEFAULT_WALLET_STATUS
+            "active"
 
         ) {
 
@@ -1216,7 +791,7 @@ async function sendMoney({
 
             !==
 
-            DEFAULT_WALLET_STATUS
+            "active"
 
         ) {
 
@@ -1234,12 +809,6 @@ async function sendMoney({
 
         }
 
-
-        /*
-        ------------------------------------------------------
-        CHECK CURRENCY
-        ------------------------------------------------------
-        */
 
         if (
 
@@ -1272,78 +841,44 @@ async function sendMoney({
 
         /*
         ------------------------------------------------------
-        RE-READ BALANCES WITH LOCK
+        Ensure balance records exist.
         ------------------------------------------------------
         */
 
         const senderBalance =
-            await findWalletBalance(
+            await ensureWalletBalance(
 
                 client,
 
-                senderWallet.id,
-
-                true
+                senderWallet
 
             );
 
 
         const receiverBalance =
-            await findWalletBalance(
+            await ensureWalletBalance(
 
                 client,
 
-                receiverWallet.id,
-
-                true
+                receiverWallet
 
             );
-
-
-        if (
-
-            !senderBalance ||
-
-            !receiverBalance
-
-        ) {
-
-            const error =
-                new Error(
-                    "Wallet balance not found."
-                );
-
-
-            error.code =
-                "WALLET_BALANCE_NOT_FOUND";
-
-
-            throw error;
-
-        }
 
 
         const senderAvailable =
-            toSafeNumber(
+            Number(
                 senderBalance.available_balance
-            );
+            ) || 0;
 
 
         const receiverAvailable =
-            toSafeNumber(
+            Number(
                 receiverBalance.available_balance
-            );
+            ) || 0;
 
-
-        /*
-        ------------------------------------------------------
-        CHECK SENDER BALANCE
-        ------------------------------------------------------
-        */
 
         if (
-            senderAvailable <
-            numericAmount
+            senderAvailable < numericAmount
         ) {
 
             const error =
@@ -1361,12 +896,6 @@ async function sendMoney({
         }
 
 
-        /*
-        ------------------------------------------------------
-        CALCULATE BALANCES
-        ------------------------------------------------------
-        */
-
         const senderNewBalance =
             senderAvailable -
             numericAmount;
@@ -1377,12 +906,6 @@ async function sendMoney({
             numericAmount;
 
 
-        /*
-        ------------------------------------------------------
-        UPDATE SENDER
-        ------------------------------------------------------
-        */
-
         await client.query(
 
             `
@@ -1390,11 +913,10 @@ async function sendMoney({
 
             SET
 
-                available_balance = $1,
-
-                updated_at = NOW()
+                available_balance = $1
 
             WHERE
+
                 wallet_id = $2
             `,
 
@@ -1409,12 +931,6 @@ async function sendMoney({
         );
 
 
-        /*
-        ------------------------------------------------------
-        UPDATE RECEIVER
-        ------------------------------------------------------
-        */
-
         await client.query(
 
             `
@@ -1422,11 +938,10 @@ async function sendMoney({
 
             SET
 
-                available_balance = $1,
-
-                updated_at = NOW()
+                available_balance = $1
 
             WHERE
+
                 wallet_id = $2
             `,
 
@@ -1443,7 +958,7 @@ async function sendMoney({
 
         /*
         ------------------------------------------------------
-        CREATE SENDER TRANSACTION
+        Create sender transaction.
         ------------------------------------------------------
         */
 
@@ -1491,8 +1006,7 @@ async function sendMoney({
 
                 )
 
-                RETURNING
-                    *
+                RETURNING *
                 `,
 
                 [
@@ -1513,7 +1027,7 @@ async function sendMoney({
 
         /*
         ------------------------------------------------------
-        CREATE RECEIVER TRANSACTION
+        Create receiver transaction.
         ------------------------------------------------------
         */
 
@@ -1561,8 +1075,7 @@ async function sendMoney({
 
                 )
 
-                RETURNING
-                    *
+                RETURNING *
                 `,
 
                 [
@@ -1580,12 +1093,6 @@ async function sendMoney({
 
             );
 
-
-        /*
-        ------------------------------------------------------
-        COMMIT
-        ------------------------------------------------------
-        */
 
         await client.query(
             "COMMIT"
@@ -1675,6 +1182,6 @@ module.exports = {
 
     sendMoney,
 
-    ensureUserWallet
+    resolveUserId
 
 };
