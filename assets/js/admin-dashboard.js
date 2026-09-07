@@ -6,22 +6,27 @@
 ========================================================= */
 
 document.addEventListener(
+
     "DOMContentLoaded",
+
     function () {
 
 
         /* =================================================
-           API SAFETY CHECK
+           API CHECK
         ================================================= */
 
         if (
+
             typeof window.apiRequest !==
             "function"
+
         ) {
 
             console.error(
-                "ADMIN DASHBOARD ERROR: window.apiRequest is not available."
+                "ADMIN DASHBOARD ERROR: apiRequest is not available."
             );
+
 
             return;
 
@@ -66,6 +71,367 @@ document.addEventListener(
             document.querySelectorAll(
                 "[data-open-section]"
             );
+
+
+        const refreshUsersButton =
+            document.getElementById(
+                "refreshUsersButton"
+            );
+
+
+        const refreshDepositsButton =
+            document.getElementById(
+                "refreshDepositsButton"
+            );
+
+
+        /* =================================================
+           STATE
+        ================================================= */
+
+        let currentUsers =
+            [];
+
+
+        let currentDeposits =
+            [];
+
+
+        /* =================================================
+           BASIC HELPERS
+        ================================================= */
+
+        function setText(
+            id,
+            value
+        ) {
+
+            const element =
+                document.getElementById(
+                    id
+                );
+
+
+            if (
+                !element
+            ) {
+
+                return;
+
+            }
+
+
+            if (
+
+                value ===
+                null
+
+                ||
+
+                value ===
+                undefined
+
+                ||
+
+                value ===
+                ""
+
+            ) {
+
+                element.textContent =
+                    "—";
+
+
+                return;
+
+            }
+
+
+            element.textContent =
+                String(
+                    value
+                );
+
+        }
+
+
+        function escapeHtml(
+            value
+        ) {
+
+            const element =
+                document.createElement(
+                    "div"
+                );
+
+
+            element.textContent =
+
+                value ===
+                null
+
+                ||
+
+                value ===
+                undefined
+
+                    ?
+
+                    ""
+
+                    :
+
+                    String(
+                        value
+                    );
+
+
+            return element.innerHTML;
+
+        }
+
+
+        function escapeAttribute(
+            value
+        ) {
+
+            return escapeHtml(
+                value
+            )
+            .replace(
+                /"/g,
+                "&quot;"
+            )
+            .replace(
+                /'/g,
+                "&#039;"
+            );
+
+        }
+
+
+        function getInitial(
+            value
+        ) {
+
+            const text =
+                String(
+                    value ||
+                    "A"
+                )
+                .trim();
+
+
+            return (
+
+                text.charAt(
+                    0
+                )
+
+                ||
+
+                "A"
+
+            )
+            .toUpperCase();
+
+        }
+
+
+        function formatAmount(
+            amount,
+            currency =
+                "INR"
+        ) {
+
+            const number =
+                Number(
+                    amount
+                );
+
+
+            const safeAmount =
+                Number.isFinite(
+                    number
+                )
+
+                    ?
+
+                    number
+
+                    :
+
+                    0;
+
+
+            return (
+
+                String(
+                    currency ||
+                    "INR"
+                )
+
+                +
+
+                " "
+
+                +
+
+                safeAmount.toLocaleString(
+
+                    "en-IN",
+
+                    {
+
+                        minimumFractionDigits:
+                            2,
+
+                        maximumFractionDigits:
+                            2
+
+                    }
+
+                )
+
+            );
+
+        }
+
+
+        function formatDate(
+            value
+        ) {
+
+            if (
+                !value
+            ) {
+
+                return "—";
+
+            }
+
+
+            try {
+
+                const date =
+                    new Date(
+                        value
+                    );
+
+
+                if (
+
+                    Number.isNaN(
+                        date.getTime()
+                    )
+
+                ) {
+
+                    return String(
+                        value
+                    );
+
+                }
+
+
+                return date.toLocaleString(
+                    "en-IN"
+                );
+
+
+            } catch (
+                error
+            ) {
+
+                return String(
+                    value
+                );
+
+            }
+
+        }
+
+
+        function getApiErrorMessage(
+            error,
+            fallback
+        ) {
+
+            return (
+
+                error?.data?.message ||
+
+                error?.data?.error ||
+
+                error?.message ||
+
+                fallback
+
+            );
+
+        }
+
+
+        /* =================================================
+           RESPONSE ARRAY EXTRACTOR
+        ================================================= */
+
+        function getArrayFromResponse(
+            data,
+            key
+        ) {
+
+            if (
+                Array.isArray(
+                    data?.[key]
+                )
+            ) {
+
+                return data[
+                    key
+                ];
+
+            }
+
+
+            if (
+                Array.isArray(
+                    data?.data?.[key]
+                )
+            ) {
+
+                return data.data[
+                    key
+                ];
+
+            }
+
+
+            if (
+                Array.isArray(
+                    data?.data
+                )
+            ) {
+
+                return data.data;
+
+            }
+
+
+            if (
+                Array.isArray(
+                    data
+                )
+            ) {
+
+                return data;
+
+            }
+
+
+            return [];
+
+        }
 
 
         /* =================================================
@@ -129,7 +495,9 @@ document.addEventListener(
         ) {
 
             mobileMenuButton.addEventListener(
+
                 "click",
+
                 function () {
 
                     if (
@@ -153,6 +521,7 @@ document.addEventListener(
                     }
 
                 }
+
             );
 
         }
@@ -171,503 +540,6 @@ document.addEventListener(
 
 
         /* =================================================
-           SECTION NAVIGATION
-        ================================================= */
-
-        function showSection(
-            sectionId
-        ) {
-
-            sections.forEach(
-                function (
-                    section
-                ) {
-
-                    section.classList.remove(
-                        "active-section"
-                    );
-
-                }
-            );
-
-
-            const targetSection =
-                document.getElementById(
-                    sectionId
-                );
-
-
-            if (
-                targetSection
-            ) {
-
-                targetSection.classList.add(
-                    "active-section"
-                );
-
-            }
-
-
-            navItems.forEach(
-                function (
-                    item
-                ) {
-
-                    item.classList.remove(
-                        "active"
-                    );
-
-
-                    if (
-
-                        item.dataset.section ===
-                        sectionId
-
-                    ) {
-
-                        item.classList.add(
-                            "active"
-                        );
-
-                    }
-
-                }
-            );
-
-
-            closeSidebar();
-
-
-            window.scrollTo({
-
-                top:
-                    0,
-
-                behavior:
-                    "smooth"
-
-            });
-
-
-            /*
-            ---------------------------------------------
-            LOAD USERS
-            ---------------------------------------------
-            */
-
-            if (
-                sectionId ===
-                "users"
-            ) {
-
-                loadUsers();
-
-            }
-
-
-            /*
-            ---------------------------------------------
-            LOAD DEPOSITS
-            ---------------------------------------------
-            */
-
-            if (
-                sectionId ===
-                "deposits"
-            ) {
-
-                loadDeposits();
-
-            }
-
-        }
-
-
-        navItems.forEach(
-            function (
-                item
-            ) {
-
-                item.addEventListener(
-                    "click",
-                    function (
-                        event
-                    ) {
-
-                        event.preventDefault();
-
-
-                        const sectionId =
-                            item.dataset.section;
-
-
-                        if (
-                            !sectionId
-                        ) {
-
-                            return;
-
-                        }
-
-
-                        showSection(
-                            sectionId
-                        );
-
-
-                        window.history.replaceState(
-
-                            null,
-
-                            "",
-
-                            "#" +
-                            sectionId
-
-                        );
-
-                    }
-                );
-
-            }
-        );
-
-
-        /* =================================================
-           QUICK ACTIONS
-        ================================================= */
-
-        quickActionButtons.forEach(
-            function (
-                button
-            ) {
-
-                button.addEventListener(
-                    "click",
-                    function () {
-
-                        const sectionId =
-                            button.dataset.openSection;
-
-
-                        if (
-                            !sectionId
-                        ) {
-
-                            return;
-
-                        }
-
-
-                        showSection(
-                            sectionId
-                        );
-
-
-                        window.history.replaceState(
-
-                            null,
-
-                            "",
-
-                            "#" +
-                            sectionId
-
-                        );
-
-                    }
-                );
-
-            }
-        );
-
-
-        /* =================================================
-           HELPERS
-        ================================================= */
-
-        function setText(
-            id,
-            value
-        ) {
-
-            const element =
-                document.getElementById(
-                    id
-                );
-
-
-            if (
-                element
-            ) {
-
-                element.textContent =
-                    value ===
-                    undefined ||
-
-                    value ===
-                    null
-
-                        ?
-
-                        ""
-
-                        :
-
-                        String(
-                            value
-                        );
-
-            }
-
-        }
-
-
-        function getInitial(
-            name
-        ) {
-
-            if (
-                !name
-            ) {
-
-                return "A";
-
-            }
-
-
-            return String(
-                name
-            )
-            .trim()
-            .charAt(
-                0
-            )
-            .toUpperCase();
-
-        }
-
-
-        function escapeHtml(
-            value
-        ) {
-
-            const div =
-                document.createElement(
-                    "div"
-                );
-
-
-            div.textContent =
-
-                value === null ||
-
-                value === undefined
-
-                    ?
-
-                    ""
-
-                    :
-
-                    String(
-                        value
-                    );
-
-
-            return div.innerHTML;
-
-        }
-
-
-        function escapeAttribute(
-            value
-        ) {
-
-            return escapeHtml(
-                value
-            )
-            .replace(
-                /"/g,
-                "&quot;"
-            )
-            .replace(
-                /'/g,
-                "&#039;"
-            );
-
-        }
-
-
-        function formatAmount(
-            amount
-        ) {
-
-            const number =
-                Number(
-                    amount ||
-                    0
-                );
-
-
-            if (
-                Number.isNaN(
-                    number
-                )
-            ) {
-
-                return "₹0.00";
-
-            }
-
-
-            return "₹" +
-                number.toLocaleString(
-                    "en-IN",
-                    {
-
-                        minimumFractionDigits:
-                            2,
-
-                        maximumFractionDigits:
-                            2
-
-                    }
-                );
-
-        }
-
-
-        function formatDate(
-            value
-        ) {
-
-            if (
-                !value
-            ) {
-
-                return "—";
-
-            }
-
-
-            try {
-
-                const date =
-                    new Date(
-                        value
-                    );
-
-
-                if (
-
-                    Number.isNaN(
-                        date.getTime()
-                    )
-
-                ) {
-
-                    return String(
-                        value
-                    );
-
-                }
-
-
-                return date.toLocaleString(
-                    "en-IN",
-                    {
-
-                        dateStyle:
-                            "medium",
-
-                        timeStyle:
-                            "short"
-
-                    }
-                );
-
-            }
-
-            catch (
-                error
-            ) {
-
-                return String(
-                    value
-                );
-
-            }
-
-        }
-
-
-        function getApiErrorMessage(
-            error,
-            fallback
-        ) {
-
-            return (
-
-                error?.data?.message ||
-
-                error?.data?.error ||
-
-                error?.message ||
-
-                fallback
-
-            );
-
-        }
-
-
-        function getArrayFromResponse(
-            data,
-            key
-        ) {
-
-            if (
-                Array.isArray(
-                    data?.[key]
-                )
-            ) {
-
-                return data[
-                    key
-                ];
-
-            }
-
-
-            if (
-                Array.isArray(
-                    data?.data
-                )
-            ) {
-
-                return data.data;
-
-            }
-
-
-            if (
-                Array.isArray(
-                    data
-                )
-            ) {
-
-                return data;
-
-            }
-
-
-            return [];
-
-        }
-
-
-        /* =================================================
            ADMIN MESSAGE
         ================================================= */
 
@@ -677,74 +549,74 @@ document.addEventListener(
                 "info"
         ) {
 
-            let container =
+            let element =
                 document.getElementById(
                     "adminActionMessage"
                 );
 
 
             if (
-                !container
+                !element
             ) {
 
-                container =
+                element =
                     document.createElement(
                         "div"
                     );
 
 
-                container.id =
+                element.id =
                     "adminActionMessage";
 
 
-                container.style.position =
+                element.style.position =
                     "fixed";
 
 
-                container.style.left =
+                element.style.left =
                     "20px";
 
 
-                container.style.right =
+                element.style.right =
                     "20px";
 
 
-                container.style.bottom =
+                element.style.bottom =
                     "20px";
 
 
-                container.style.zIndex =
-                    "9999";
+                element.style.zIndex =
+                    "99999";
 
 
-                container.style.padding =
+                element.style.padding =
                     "16px";
 
 
-                container.style.borderRadius =
+                element.style.borderRadius =
                     "12px";
 
 
-                container.style.fontWeight =
+                element.style.fontWeight =
                     "700";
 
 
-                container.style.textAlign =
+                element.style.textAlign =
                     "center";
 
 
-                container.style.boxShadow =
-                    "0 10px 30px rgba(0,0,0,0.15)";
+                element.style.boxShadow =
+                    "0 10px 30px rgba(0,0,0,0.25)";
 
 
                 document.body.appendChild(
-                    container
+                    element
                 );
 
             }
 
 
-            container.textContent =
+            element.textContent =
                 message ||
                 "";
 
@@ -754,15 +626,15 @@ document.addEventListener(
                 "success"
             ) {
 
-                container.style.background =
+                element.style.background =
                     "#dcfce7";
 
 
-                container.style.color =
+                element.style.color =
                     "#166534";
 
 
-                container.style.border =
+                element.style.border =
                     "1px solid #86efac";
 
             }
@@ -772,66 +644,63 @@ document.addEventListener(
                 "error"
             ) {
 
-                container.style.background =
+                element.style.background =
                     "#fee2e2";
 
 
-                container.style.color =
+                element.style.color =
                     "#991b1b";
 
 
-                container.style.border =
+                element.style.border =
                     "1px solid #fca5a5";
 
             }
 
             else {
 
-                container.style.background =
+                element.style.background =
                     "#dbeafe";
 
 
-                container.style.color =
+                element.style.color =
                     "#1e40af";
 
 
-                container.style.border =
+                element.style.border =
                     "1px solid #93c5fd";
 
             }
 
 
-            container.style.display =
+            element.style.display =
                 "block";
 
 
-            window.clearTimeout(
+            clearTimeout(
                 window.__adminMessageTimer
             );
 
 
             window.__adminMessageTimer =
-                window.setTimeout(
+                setTimeout(
+
                     function () {
 
-                        if (
-                            container
-                        ) {
-
-                            container.style.display =
-                                "none";
-
-                        }
+                        element.style.display =
+                            "none";
 
                     },
-                    3500
+
+                    4000
+
                 );
 
         }
 
 
         /* =================================================
-           LOAD ADMIN PROFILE
+           ADMIN PROFILE
         ================================================= */
 
         function loadAdminProfile() {
@@ -873,9 +742,7 @@ document.addEventListener(
 
 
                 const email =
-
                     user.email ||
-
                     "—";
 
 
@@ -883,9 +750,9 @@ document.addEventListener(
 
                     user.role ||
 
-                    user.userRole ||
-
                     user.user_role ||
+
+                    user.userRole ||
 
                     "admin";
 
@@ -947,9 +814,8 @@ document.addEventListener(
                     )
                 );
 
-            }
 
-            catch (
+            } catch (
                 error
             ) {
 
@@ -964,7 +830,140 @@ document.addEventListener(
 
 
         /* =================================================
-           USERS
+           USER NORMALIZER
+        ================================================= */
+
+        function normalizeUser(
+            user
+        ) {
+
+            return {
+
+                database_id:
+
+                    user.id ||
+
+                    user.user_id ||
+
+                    user.user_uuid ||
+
+                    null,
+
+
+                public_user_id:
+
+                    user.public_user_id ||
+
+                    user.user_code ||
+
+                    user.public_id ||
+
+                    user.userId ||
+
+                    user.id ||
+
+                    "—",
+
+
+                wallet_id:
+
+                    user.wallet_id ||
+
+                    user.walletId ||
+
+                    user.wallet?.id ||
+
+                    "—",
+
+
+                full_name:
+
+                    user.full_name ||
+
+                    user.fullName ||
+
+                    user.name ||
+
+                    user.user_name ||
+
+                    "User",
+
+
+                email:
+
+                    user.email ||
+
+                    user.user_email ||
+
+                    "—",
+
+
+                phone:
+
+                    user.phone ||
+
+                    user.mobile ||
+
+                    user.mobile_number ||
+
+                    user.phone_number ||
+
+                    "—",
+
+
+                available_balance:
+
+                    user.available_balance ??
+
+                    user.balance ??
+
+                    user.wallet?.available_balance ??
+
+                    0,
+
+
+                pending_balance:
+
+                    user.pending_balance ??
+
+                    user.wallet?.pending_balance ??
+
+                    0,
+
+
+                currency:
+
+                    user.currency ||
+
+                    user.wallet?.currency ||
+
+                    "INR",
+
+
+                status:
+
+                    user.status ||
+
+                    user.user_status ||
+
+                    "active",
+
+
+                created_at:
+
+                    user.created_at ||
+
+                    user.createdAt ||
+
+                    null
+
+            };
+
+        }
+
+
+        /* =================================================
+           LOAD USERS
         ================================================= */
 
         async function loadUsers() {
@@ -990,8 +989,8 @@ document.addEventListener(
             }
 
 
-            usersList.innerHTML = `
-
+            usersList.innerHTML =
+                `
                 <div class="empty-state">
 
                     <div class="empty-icon">
@@ -1003,13 +1002,22 @@ document.addEventListener(
                     </strong>
 
                 </div>
+                `;
 
-            `;
+
+            if (
+                usersMessage
+            ) {
+
+                usersMessage.style.display =
+                    "none";
+
+            }
 
 
             try {
 
-                const data =
+                const response =
                     await window.apiRequest(
 
                         "/api/admin/users",
@@ -1024,11 +1032,24 @@ document.addEventListener(
                     );
 
 
+                console.log(
+                    "ADMIN USERS API RESPONSE:",
+                    response
+                );
+
+
                 const users =
                     getArrayFromResponse(
-                        data,
+                        response,
                         "users"
+                    )
+                    .map(
+                        normalizeUser
                     );
+
+
+                currentUsers =
+                    users;
 
 
                 setText(
@@ -1042,18 +1063,7 @@ document.addEventListener(
                 );
 
 
-                if (
-                    usersMessage
-                ) {
-
-                    usersMessage.style.display =
-                        "none";
-
-                }
-
-            }
-
-            catch (
+            } catch (
                 error
             ) {
 
@@ -1063,18 +1073,18 @@ document.addEventListener(
                 );
 
 
-                const errorMessage =
+                const message =
                     getApiErrorMessage(
 
                         error,
 
-                        "Unable to load users"
+                        "Unable to load users."
 
                     );
 
 
-                usersList.innerHTML = `
-
+                usersList.innerHTML =
+                    `
                     <div class="empty-state">
 
                         <div class="empty-icon">
@@ -1087,13 +1097,12 @@ document.addEventListener(
 
                         <p>
                             ${escapeHtml(
-                                errorMessage
+                                message
                             )}
                         </p>
 
                     </div>
-
-                `;
+                    `;
 
 
                 if (
@@ -1105,7 +1114,7 @@ document.addEventListener(
 
 
                     usersMessage.textContent =
-                        errorMessage;
+                        message;
 
                 }
 
@@ -1113,6 +1122,10 @@ document.addEventListener(
 
         }
 
+
+        /* =================================================
+           RENDER USERS
+        ================================================= */
 
         function renderUsers(
             users
@@ -1137,15 +1150,17 @@ document.addEventListener(
 
                 !Array.isArray(
                     users
-                ) ||
+                )
+
+                ||
 
                 users.length ===
                 0
 
             ) {
 
-                usersList.innerHTML = `
-
+                usersList.innerHTML =
+                    `
                     <div class="empty-state">
 
                         <div class="empty-icon">
@@ -1157,8 +1172,7 @@ document.addEventListener(
                         </strong>
 
                     </div>
-
-                `;
+                    `;
 
 
                 return;
@@ -1168,165 +1182,334 @@ document.addEventListener(
 
             usersList.innerHTML =
                 users.map(
+
                     function (
                         user
                     ) {
 
-                        const userId =
-
-                            user.id ||
-
-                            user.user_id ||
-
-                            user.public_user_id ||
-
-                            "";
-
-
-                        const name =
-
-                            user.full_name ||
-
-                            user.fullName ||
-
-                            user.name ||
-
-                            "User";
-
-
-                        const email =
-
-                            user.email ||
-
-                            "—";
-
-
-                        const status =
+                        const safeStatus =
                             String(
-
                                 user.status ||
-
                                 "active"
-
                             )
                             .trim()
                             .toLowerCase();
 
 
                         return `
+                        <div
+                            class="content-card"
+                            style="
+                                margin-bottom:16px;
+                                padding:20px;
+                            "
+                        >
 
                             <div
-                                class="content-card"
                                 style="
-                                    margin-bottom:12px;
-                                    padding:20px;
+                                    display:flex;
+                                    justify-content:space-between;
+                                    gap:16px;
+                                    flex-wrap:wrap;
+                                    align-items:flex-start;
                                 "
                             >
 
-                                <strong
-                                    style="
-                                        font-size:20px;
-                                    "
-                                >
-                                    ${escapeHtml(
-                                        name
-                                    )}
-                                </strong>
+                                <div>
 
-
-                                <p>
-
-                                    Email:
-
-                                    ${escapeHtml(
-                                        email
-                                    )}
-
-                                </p>
-
-
-                                <p>
-
-                                    Status:
-
-                                    <strong>
-
+                                    <strong
+                                        style="
+                                            font-size:20px;
+                                        "
+                                    >
                                         ${escapeHtml(
-                                            status
+                                            user.full_name
                                         )}
-
                                     </strong>
 
-                                </p>
+                                    <p
+                                        style="
+                                            margin-top:8px;
+                                            opacity:.75;
+                                        "
+                                    >
+                                        User Account Details
+                                    </p>
+
+                                </div>
 
 
                                 <div
                                     style="
-                                        display:flex;
-                                        gap:10px;
-                                        flex-wrap:wrap;
-                                        margin-top:15px;
+                                        padding:6px 12px;
+                                        border-radius:999px;
+                                        border:1px solid rgba(255,255,255,.15);
                                     "
                                 >
+                                    ${escapeHtml(
+                                        safeStatus
+                                    )}
+                                </div>
 
-                                    <button
-                                        type="button"
-                                        class="admin-user-action"
-                                        data-user-id="${escapeAttribute(
-                                            userId
-                                        )}"
-                                        data-user-status="active"
+                            </div>
+
+
+                            <div
+                                style="
+                                    display:grid;
+                                    grid-template-columns:
+                                        repeat(
+                                            auto-fit,
+                                            minmax(220px,1fr)
+                                        );
+                                    gap:14px;
+                                    margin-top:20px;
+                                "
+                            >
+
+                                <div>
+
+                                    <small>
+                                        User ID
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                user.public_user_id
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div>
+
+                                    <small>
+                                        Wallet ID
+                                    </small>
+
+                                    <div
+                                        style="
+                                            word-break:break-all;
+                                        "
                                     >
+                                        <strong>
+                                            ${escapeHtml(
+                                                user.wallet_id
+                                            )}
+                                        </strong>
+                                    </div>
 
-                                        Unblock / Activate
-
-                                    </button>
+                                </div>
 
 
-                                    <button
-                                        type="button"
-                                        class="admin-user-action"
-                                        data-user-id="${escapeAttribute(
-                                            userId
-                                        )}"
-                                        data-user-status="blocked"
+                                <div>
+
+                                    <small>
+                                        Full Name
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                user.full_name
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div>
+
+                                    <small>
+                                        Available Balance
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                formatAmount(
+                                                    user.available_balance,
+                                                    user.currency
+                                                )
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div>
+
+                                    <small>
+                                        Pending Balance
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                formatAmount(
+                                                    user.pending_balance,
+                                                    user.currency
+                                                )
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div>
+
+                                    <small>
+                                        Email
+                                    </small>
+
+                                    <div
+                                        style="
+                                            word-break:break-word;
+                                        "
                                     >
+                                        <strong>
+                                            ${escapeHtml(
+                                                user.email
+                                            )}
+                                        </strong>
+                                    </div>
 
-                                        Block
+                                </div>
 
-                                    </button>
+
+                                <div>
+
+                                    <small>
+                                        Mobile Number
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                user.phone
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div>
+
+                                    <small>
+                                        Account Status
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                safeStatus
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div>
+
+                                    <small>
+                                        Joined Date
+                                    </small>
+
+                                    <div>
+                                        <strong>
+                                            ${escapeHtml(
+                                                formatDate(
+                                                    user.created_at
+                                                )
+                                            )}
+                                        </strong>
+                                    </div>
 
                                 </div>
 
                             </div>
 
+
+                            <div
+                                style="
+                                    display:flex;
+                                    gap:10px;
+                                    flex-wrap:wrap;
+                                    margin-top:22px;
+                                "
+                            >
+
+                                <button
+                                    type="button"
+                                    class="admin-user-action"
+                                    data-user-id="${escapeAttribute(
+                                        user.database_id ||
+                                        user.public_user_id
+                                    )}"
+                                    data-user-status="active"
+                                >
+                                    Activate
+                                </button>
+
+
+                                <button
+                                    type="button"
+                                    class="admin-user-action"
+                                    data-user-id="${escapeAttribute(
+                                        user.database_id ||
+                                        user.public_user_id
+                                    )}"
+                                    data-user-status="blocked"
+                                >
+                                    Block
+                                </button>
+
+                            </div>
+
+                        </div>
                         `;
 
                     }
+
                 )
                 .join(
                     ""
                 );
 
 
-            bindUserActionButtons();
+            bindUserActions();
 
         }
 
 
-        function bindUserActionButtons() {
+        /* =================================================
+           USER ACTIONS
+        ================================================= */
+
+        function bindUserActions() {
 
             document
                 .querySelectorAll(
                     ".admin-user-action"
                 )
                 .forEach(
+
                     function (
                         button
                     ) {
 
                         button.addEventListener(
+
                             "click",
+
                             async function () {
 
                                 const userId =
@@ -1342,11 +1525,8 @@ document.addEventListener(
                                 ) {
 
                                     showMessage(
-
                                         "User ID not found.",
-
                                         "error"
-
                                     );
 
 
@@ -1401,7 +1581,9 @@ document.addEventListener(
 
                                         encodeURIComponent(
                                             userId
-                                        ) +
+                                        )
+
+                                        +
 
                                         "/status",
 
@@ -1443,14 +1625,13 @@ document.addEventListener(
 
                                     await loadUsers();
 
-                                }
 
-                                catch (
+                                } catch (
                                     error
                                 ) {
 
                                     console.error(
-                                        "UPDATE USER ERROR:",
+                                        "USER STATUS ERROR:",
                                         error
                                     );
 
@@ -1461,7 +1642,7 @@ document.addEventListener(
 
                                             error,
 
-                                            "Unable to update user status"
+                                            "Unable to update user."
 
                                         ),
 
@@ -1480,16 +1661,114 @@ document.addEventListener(
                                 }
 
                             }
+
                         );
 
                     }
+
                 );
 
         }
 
 
         /* =================================================
-           DEPOSITS
+           DEPOSIT NORMALIZER
+        ================================================= */
+
+        function normalizeDeposit(
+            deposit
+        ) {
+
+            return {
+
+                id:
+
+                    deposit.id ||
+
+                    deposit.deposit_id ||
+
+                    deposit.public_deposit_id ||
+
+                    "",
+
+
+                user_name:
+
+                    deposit.user_name ||
+
+                    deposit.full_name ||
+
+                    deposit.user_full_name ||
+
+                    deposit.customer_name ||
+
+                    "User",
+
+
+                user_email:
+
+                    deposit.user_email ||
+
+                    deposit.email ||
+
+                    "—",
+
+
+                user_id:
+
+                    deposit.public_user_id ||
+
+                    deposit.user_id ||
+
+                    "—",
+
+
+                amount:
+
+                    deposit.amount ??
+                    0,
+
+
+                currency:
+
+                    deposit.currency ||
+                    "INR",
+
+
+                utr:
+
+                    deposit.utr ||
+
+                    deposit.utr_number ||
+
+                    deposit.transaction_reference ||
+
+                    deposit.reference_number ||
+
+                    "—",
+
+
+                status:
+
+                    deposit.status ||
+                    "pending",
+
+
+                created_at:
+
+                    deposit.created_at ||
+
+                    deposit.createdAt ||
+
+                    null
+
+            };
+
+        }
+
+
+        /* =================================================
+           LOAD DEPOSITS
         ================================================= */
 
         async function loadDeposits() {
@@ -1509,8 +1788,8 @@ document.addEventListener(
             }
 
 
-            depositsList.innerHTML = `
-
+            depositsList.innerHTML =
+                `
                 <div class="empty-state">
 
                     <div class="empty-icon">
@@ -1522,20 +1801,12 @@ document.addEventListener(
                     </strong>
 
                 </div>
-
-            `;
+                `;
 
 
             try {
 
-                /*
-                ---------------------------------------------
-                EXACT BACKEND ENDPOINT:
-                GET /api/admin/deposits/pending
-                ---------------------------------------------
-                */
-
-                const data =
+                const response =
                     await window.apiRequest(
 
                         "/api/admin/deposits/pending",
@@ -1550,11 +1821,24 @@ document.addEventListener(
                     );
 
 
+                console.log(
+                    "ADMIN DEPOSITS API RESPONSE:",
+                    response
+                );
+
+
                 const deposits =
                     getArrayFromResponse(
-                        data,
+                        response,
                         "deposits"
+                    )
+                    .map(
+                        normalizeDeposit
                     );
+
+
+                currentDeposits =
+                    deposits;
 
 
                 setText(
@@ -1562,11 +1846,6 @@ document.addEventListener(
                     deposits.length
                 );
 
-
-                /*
-                Current backend endpoint returns pending
-                deposits only.
-                */
 
                 setText(
                     "totalDeposits",
@@ -1578,9 +1857,8 @@ document.addEventListener(
                     deposits
                 );
 
-            }
 
-            catch (
+            } catch (
                 error
             ) {
 
@@ -1590,18 +1868,18 @@ document.addEventListener(
                 );
 
 
-                const errorMessage =
+                const message =
                     getApiErrorMessage(
 
                         error,
 
-                        "Unable to load deposits"
+                        "Unable to load deposits."
 
                     );
 
 
-                depositsList.innerHTML = `
-
+                depositsList.innerHTML =
+                    `
                     <div class="empty-state">
 
                         <div class="empty-icon">
@@ -1614,13 +1892,12 @@ document.addEventListener(
 
                         <p>
                             ${escapeHtml(
-                                errorMessage
+                                message
                             )}
                         </p>
 
                     </div>
-
-                `;
+                    `;
 
             }
 
@@ -1654,15 +1931,17 @@ document.addEventListener(
 
                 !Array.isArray(
                     deposits
-                ) ||
+                )
+
+                ||
 
                 deposits.length ===
                 0
 
             ) {
 
-                depositsList.innerHTML = `
-
+                depositsList.innerHTML =
+                    `
                     <div class="empty-state">
 
                         <div class="empty-icon">
@@ -1673,13 +1952,8 @@ document.addEventListener(
                             No pending deposit requests
                         </strong>
 
-                        <p>
-                            New customer deposit requests will appear here.
-                        </p>
-
                     </div>
-
-                `;
+                    `;
 
 
                 return;
@@ -1689,758 +1963,479 @@ document.addEventListener(
 
             depositsList.innerHTML =
                 deposits.map(
+
                     function (
                         deposit
                     ) {
 
-                        const depositId =
-
-                            deposit.id ||
-
-                            deposit.deposit_id ||
-
-                            deposit.public_deposit_id ||
-
-                            "";
-
-
-                        const name =
-
-                            deposit.user_name ||
-
-                            deposit.full_name ||
-
-                            deposit.user_full_name ||
-
-                            deposit.name ||
-
-                            deposit.customer_name ||
-
-                            "User";
-
-
-                        const email =
-
-                            deposit.user_email ||
-
-                            deposit.email ||
-
-                            "—";
-
-
-                        const amount =
-
-                            deposit.amount ||
-
-                            deposit.deposit_amount ||
-
-                            0;
-
-
-                        const status =
-
-                            deposit.status ||
-
-                            "pending";
-
-
-                        const utr =
-
-                            deposit.utr_number ||
-
-                            deposit.utr ||
-
-                            deposit.transaction_id ||
-
-                            deposit.transaction_reference ||
-
-                            deposit.payment_reference ||
-
-                            deposit.reference_number ||
-
-                            "Not provided";
-
-
-                        const paymentMethod =
-
-                            deposit.payment_method ||
-
-                            deposit.method ||
-
-                            "UPI";
-
-
-                        const upiId =
-
-                            deposit.upi_id ||
-
-                            deposit.payment_upi_id ||
-
-                            deposit.sender_upi_id ||
-
-                            "—";
-
-
-                        const proofUrl =
-
-                            deposit.payment_proof_url ||
-
-                            deposit.proof_url ||
-
-                            deposit.screenshot_url ||
-
-                            deposit.payment_screenshot_url ||
-
-                            null;
-
-
-                        const createdAt =
-
-                            deposit.created_at ||
-
-                            deposit.createdAt ||
-
-                            deposit.requested_at ||
-
-                            deposit.requestedAt ||
-
-                            null;
-
-
-                        const safeDepositId =
-                            escapeAttribute(
-                                depositId
-                            );
-
-
                         return `
+                        <div
+                            class="content-card"
+                            style="
+                                margin-bottom:16px;
+                                padding:20px;
+                            "
+                        >
 
                             <div
-                                class="content-card deposit-request-card"
                                 style="
-                                    margin-bottom:18px;
-                                    padding:22px;
-                                    border:1px solid #d7dce5;
-                                    border-radius:24px;
+                                    display:grid;
+                                    grid-template-columns:
+                                        repeat(
+                                            auto-fit,
+                                            minmax(200px,1fr)
+                                        );
+                                    gap:14px;
                                 "
                             >
 
-                                <div
-                                    style="
-                                        display:flex;
-                                        justify-content:space-between;
-                                        gap:15px;
-                                        align-items:flex-start;
-                                        flex-wrap:wrap;
-                                    "
-                                >
+                                <div>
 
-                                    <div>
+                                    <small>
+                                        Deposit ID
+                                    </small>
 
-                                        <strong
-                                            style="
-                                                font-size:22px;
-                                            "
-                                        >
-
-                                            ${escapeHtml(
-                                                name
-                                            )}
-
-                                        </strong>
-
-
-                                        <p>
-
-                                            ${escapeHtml(
-                                                email
-                                            )}
-
-                                        </p>
-
-                                    </div>
-
-
-                                    <div>
-
-                                        <strong>
-
-                                            ${escapeHtml(
-                                                String(
-                                                    status
-                                                )
-                                            )}
-
-                                        </strong>
-
-                                    </div>
+                                    <strong>
+                                        ${escapeHtml(
+                                            deposit.id
+                                        )}
+                                    </strong>
 
                                 </div>
 
 
-                                <hr
-                                    style="
-                                        margin:18px 0;
-                                        border:0;
-                                        border-top:1px solid #e5e7eb;
-                                    "
-                                >
+                                <div>
 
-
-                                <p>
+                                    <small>
+                                        User
+                                    </small>
 
                                     <strong>
-                                        Amount:
+                                        ${escapeHtml(
+                                            deposit.user_name
+                                        )}
                                     </strong>
 
-                                    ${escapeHtml(
-                                        formatAmount(
-                                            amount
-                                        )
-                                    )}
-
-                                </p>
+                                </div>
 
 
-                                <p>
+                                <div>
+
+                                    <small>
+                                        User ID
+                                    </small>
 
                                     <strong>
-                                        Payment Method:
+                                        ${escapeHtml(
+                                            deposit.user_id
+                                        )}
                                     </strong>
 
-                                    ${escapeHtml(
-                                        paymentMethod
-                                    )}
-
-                                </p>
+                                </div>
 
 
-                                <p>
+                                <div>
+
+                                    <small>
+                                        Amount
+                                    </small>
 
                                     <strong>
-                                        UTR / Transaction ID:
+                                        ${escapeHtml(
+                                            formatAmount(
+                                                deposit.amount,
+                                                deposit.currency
+                                            )
+                                        )}
                                     </strong>
 
-                                    ${escapeHtml(
-                                        utr
-                                    )}
-
-                                </p>
+                                </div>
 
 
-                                <p>
+                                <div>
+
+                                    <small>
+                                        UTR Number
+                                    </small>
 
                                     <strong>
-                                        UPI ID:
+                                        ${escapeHtml(
+                                            deposit.utr
+                                        )}
                                     </strong>
 
-                                    ${escapeHtml(
-                                        upiId
-                                    )}
-
-                                </p>
+                                </div>
 
 
-                                <p>
+                                <div>
+
+                                    <small>
+                                        Requested At
+                                    </small>
 
                                     <strong>
-                                        Requested:
+                                        ${escapeHtml(
+                                            formatDate(
+                                                deposit.created_at
+                                            )
+                                        )}
                                     </strong>
-
-                                    ${escapeHtml(
-                                        formatDate(
-                                            createdAt
-                                        )
-                                    )}
-
-                                </p>
-
-
-                                ${
-
-                                    proofUrl
-
-                                        ?
-
-                                        `
-
-                                            <div
-                                                style="
-                                                    margin-top:20px;
-                                                "
-                                            >
-
-                                                <strong>
-                                                    Payment Proof / Screenshot
-                                                </strong>
-
-
-                                                <div
-                                                    style="
-                                                        margin-top:10px;
-                                                    "
-                                                >
-
-                                                    <a
-                                                        href="${escapeAttribute(
-                                                            proofUrl
-                                                        )}"
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                    >
-
-                                                        View Payment Proof / QR
-
-                                                    </a>
-
-                                                </div>
-
-                                            </div>
-
-                                        `
-
-                                        :
-
-                                        `
-
-                                            <p
-                                                style="
-                                                    margin-top:18px;
-                                                "
-                                            >
-
-                                                <strong>
-                                                    Payment Proof:
-                                                </strong>
-
-                                                Not uploaded
-
-                                            </p>
-
-                                        `
-
-                                }
-
-
-                                <div
-                                    style="
-                                        display:flex;
-                                        gap:12px;
-                                        flex-wrap:wrap;
-                                        margin-top:24px;
-                                    "
-                                >
-
-                                    <button
-                                        type="button"
-                                        class="deposit-approve-button"
-                                        data-deposit-id="${safeDepositId}"
-                                    >
-
-                                        ✓ Approve Deposit
-
-                                    </button>
-
-
-                                    <button
-                                        type="button"
-                                        class="deposit-reject-button"
-                                        data-deposit-id="${safeDepositId}"
-                                    >
-
-                                        ✕ Reject Deposit
-
-                                    </button>
 
                                 </div>
 
                             </div>
 
+
+                            <div
+                                style="
+                                    display:flex;
+                                    gap:10px;
+                                    flex-wrap:wrap;
+                                    margin-top:20px;
+                                "
+                            >
+
+                                <button
+                                    type="button"
+                                    class="admin-deposit-action"
+                                    data-deposit-id="${escapeAttribute(
+                                        deposit.id
+                                    )}"
+                                    data-action="approve"
+                                >
+                                    Approve
+                                </button>
+
+
+                                <button
+                                    type="button"
+                                    class="admin-deposit-action"
+                                    data-deposit-id="${escapeAttribute(
+                                        deposit.id
+                                    )}"
+                                    data-action="reject"
+                                >
+                                    Reject
+                                </button>
+
+                            </div>
+
+                        </div>
                         `;
 
                     }
+
                 )
                 .join(
                     ""
                 );
 
 
-            bindDepositActionButtons();
+            bindDepositActions();
 
         }
 
 
         /* =================================================
-           DEPOSIT BUTTON EVENTS
+           DEPOSIT ACTIONS
         ================================================= */
 
-        function bindDepositActionButtons() {
+        function bindDepositActions() {
 
             document
                 .querySelectorAll(
-                    ".deposit-approve-button"
+                    ".admin-deposit-action"
                 )
                 .forEach(
+
                     function (
                         button
                     ) {
 
                         button.addEventListener(
+
                             "click",
-                            function () {
 
-                                approveDeposit(
+                            async function () {
 
-                                    button.dataset.depositId,
+                                const depositId =
+                                    button.dataset.depositId;
 
-                                    button
 
-                                );
+                                const action =
+                                    button.dataset.action;
 
-                            }
-                        );
 
-                    }
-                );
+                                if (
+                                    !depositId
+                                ) {
 
+                                    showMessage(
+                                        "Deposit ID not found.",
+                                        "error"
+                                    );
 
-            document
-                .querySelectorAll(
-                    ".deposit-reject-button"
-                )
-                .forEach(
-                    function (
-                        button
-                    ) {
 
-                        button.addEventListener(
-                            "click",
-                            function () {
-
-                                rejectDeposit(
-
-                                    button.dataset.depositId,
-
-                                    button
-
-                                );
-
-                            }
-                        );
-
-                    }
-                );
-
-        }
-
-
-        /* =================================================
-           APPROVE DEPOSIT
-        ================================================= */
-
-        async function approveDeposit(
-            depositId,
-            button
-        ) {
-
-            if (
-                !depositId
-            ) {
-
-                showMessage(
-
-                    "Deposit ID not found.",
-
-                    "error"
-
-                );
-
-
-                return;
-
-            }
-
-
-            const confirmed =
-                window.confirm(
-
-                    "Are you sure you want to approve this deposit? Customer wallet will be credited."
-
-                );
-
-
-            if (
-                !confirmed
-            ) {
-
-                return;
-
-            }
-
-
-            const originalText =
-                button.textContent;
-
-
-            button.disabled =
-                true;
-
-
-            button.textContent =
-                "Approving...";
-
-
-            try {
-
-                /*
-                ---------------------------------------------
-                EXACT BACKEND ENDPOINT:
-                POST /api/admin/deposits/:depositId/approve
-                ---------------------------------------------
-                */
-
-                const data =
-                    await window.apiRequest(
-
-                        "/api/admin/deposits/" +
-
-                        encodeURIComponent(
-                            depositId
-                        ) +
-
-                        "/approve",
-
-                        {
-
-                            method:
-                                "POST",
-
-                            body:
-                                {}
-
-                        }
-
-                    );
-
-
-                showMessage(
-
-                    data?.message ||
-
-                    "Deposit approved successfully.",
-
-                    "success"
-
-                );
-
-
-                await loadDeposits();
-
-            }
-
-            catch (
-                error
-            ) {
-
-                console.error(
-                    "APPROVE DEPOSIT ERROR:",
-                    error
-                );
-
-
-                showMessage(
-
-                    getApiErrorMessage(
-
-                        error,
-
-                        "Deposit approval failed."
-
-                    ),
-
-                    "error"
-
-                );
-
-
-                button.disabled =
-                    false;
-
-
-                button.textContent =
-                    originalText;
-
-            }
-
-        }
-
-
-        /* =================================================
-           REJECT DEPOSIT
-        ================================================= */
-
-        async function rejectDeposit(
-            depositId,
-            button
-        ) {
-
-            if (
-                !depositId
-            ) {
-
-                showMessage(
-
-                    "Deposit ID not found.",
-
-                    "error"
-
-                );
-
-
-                return;
-
-            }
-
-
-            const reason =
-                window.prompt(
-
-                    "Enter rejection reason (optional):",
-
-                    ""
-
-                );
-
-
-            if (
-                reason ===
-                null
-            ) {
-
-                return;
-
-            }
-
-
-            const confirmed =
-                window.confirm(
-
-                    "Are you sure you want to reject this deposit request?"
-
-                );
-
-
-            if (
-                !confirmed
-            ) {
-
-                return;
-
-            }
-
-
-            const originalText =
-                button.textContent;
-
-
-            button.disabled =
-                true;
-
-
-            button.textContent =
-                "Rejecting...";
-
-
-            try {
-
-                /*
-                ---------------------------------------------
-                EXACT BACKEND ENDPOINT:
-                POST /api/admin/deposits/:depositId/reject
-                ---------------------------------------------
-                */
-
-                const data =
-                    await window.apiRequest(
-
-                        "/api/admin/deposits/" +
-
-                        encodeURIComponent(
-                            depositId
-                        ) +
-
-                        "/reject",
-
-                        {
-
-                            method:
-                                "POST",
-
-                            body:
-
-                                {
-
-                                    reason:
-                                        String(
-                                            reason ||
-                                            ""
-                                        )
-                                        .trim() ||
-                                        null
+                                    return;
 
                                 }
 
-                        }
 
-                    );
+                                const confirmed =
+                                    window.confirm(
+
+                                        action ===
+                                        "approve"
+
+                                            ?
+
+                                            "Approve this deposit? The user's wallet may be credited."
+
+                                            :
+
+                                            "Reject this deposit?"
+
+                                    );
 
 
-                showMessage(
+                                if (
+                                    !confirmed
+                                ) {
 
-                    data?.message ||
+                                    return;
 
-                    "Deposit rejected successfully.",
+                                }
 
-                    "success"
+
+                                const originalText =
+                                    button.textContent;
+
+
+                                button.disabled =
+                                    true;
+
+
+                                button.textContent =
+                                    "Processing...";
+
+
+                                try {
+
+                                    const endpoint =
+
+                                        action ===
+                                        "approve"
+
+                                            ?
+
+                                            "/api/admin/deposits/" +
+
+                                            encodeURIComponent(
+                                                depositId
+                                            )
+
+                                            +
+
+                                            "/approve"
+
+                                            :
+
+                                            "/api/admin/deposits/" +
+
+                                            encodeURIComponent(
+                                                depositId
+                                            )
+
+                                            +
+
+                                            "/reject";
+
+
+                                    await window.apiRequest(
+
+                                        endpoint,
+
+                                        {
+
+                                            method:
+                                                "PATCH"
+
+                                        }
+
+                                    );
+
+
+                                    showMessage(
+
+                                        action ===
+                                        "approve"
+
+                                            ?
+
+                                            "Deposit approved successfully."
+
+                                            :
+
+                                            "Deposit rejected successfully.",
+
+                                        "success"
+
+                                    );
+
+
+                                    await loadDeposits();
+
+                                    await loadUsers();
+
+
+                                } catch (
+                                    error
+                                ) {
+
+                                    console.error(
+                                        "DEPOSIT ACTION ERROR:",
+                                        error
+                                    );
+
+
+                                    showMessage(
+
+                                        getApiErrorMessage(
+
+                                            error,
+
+                                            "Unable to process deposit."
+
+                                        ),
+
+                                        "error"
+
+                                    );
+
+
+                                    button.disabled =
+                                        false;
+
+
+                                    button.textContent =
+                                        originalText;
+
+                                }
+
+                            }
+
+                        );
+
+                    }
 
                 );
 
+        }
 
-                await loadDeposits();
+
+        /* =================================================
+           SECTION NAVIGATION
+        ================================================= */
+
+        function showSection(
+            sectionId
+        ) {
+
+            sections.forEach(
+
+                function (
+                    section
+                ) {
+
+                    section.classList.remove(
+                        "active-section"
+                    );
+
+                }
+
+            );
+
+
+            const target =
+                document.getElementById(
+                    sectionId
+                );
+
+
+            if (
+                target
+            ) {
+
+                target.classList.add(
+                    "active-section"
+                );
 
             }
 
-            catch (
-                error
+
+            navItems.forEach(
+
+                function (
+                    item
+                ) {
+
+                    item.classList.remove(
+                        "active"
+                    );
+
+
+                    if (
+
+                        item.dataset.section ===
+                        sectionId
+
+                    ) {
+
+                        item.classList.add(
+                            "active"
+                        );
+
+                    }
+
+                }
+
+            );
+
+
+            closeSidebar();
+
+
+            window.scrollTo(
+
+                {
+
+                    top:
+                        0,
+
+                    behavior:
+                        "smooth"
+
+                }
+
+            );
+
+
+            if (
+                sectionId ===
+                "users"
             ) {
 
-                console.error(
-                    "REJECT DEPOSIT ERROR:",
-                    error
-                );
+                loadUsers();
+
+            }
 
 
-                showMessage(
+            if (
+                sectionId ===
+                "deposits"
+            ) {
 
-                    getApiErrorMessage(
-
-                        error,
-
-                        "Deposit rejection failed."
-
-                    ),
-
-                    "error"
-
-                );
-
-
-                button.disabled =
-                    false;
-
-
-                button.textContent =
-                    originalText;
+                loadDeposits();
 
             }
 
@@ -2448,14 +2443,121 @@ document.addEventListener(
 
 
         /* =================================================
-           REFRESH USERS
+           NAVIGATION EVENTS
         ================================================= */
 
-        const refreshUsersButton =
-            document.getElementById(
-                "refreshUsersButton"
-            );
+        navItems.forEach(
 
+            function (
+                item
+            ) {
+
+                item.addEventListener(
+
+                    "click",
+
+                    function (
+                        event
+                    ) {
+
+                        event.preventDefault();
+
+
+                        const sectionId =
+                            item.dataset.section;
+
+
+                        if (
+                            !sectionId
+                        ) {
+
+                            return;
+
+                        }
+
+
+                        showSection(
+                            sectionId
+                        );
+
+
+                        window.history.replaceState(
+
+                            null,
+
+                            "",
+
+                            "#" +
+                            sectionId
+
+                        );
+
+                    }
+
+                );
+
+            }
+
+        );
+
+
+        /* =================================================
+           QUICK ACTION EVENTS
+        ================================================= */
+
+        quickActionButtons.forEach(
+
+            function (
+                button
+            ) {
+
+                button.addEventListener(
+
+                    "click",
+
+                    function () {
+
+                        const sectionId =
+                            button.dataset.openSection;
+
+
+                        if (
+                            !sectionId
+                        ) {
+
+                            return;
+
+                        }
+
+
+                        showSection(
+                            sectionId
+                        );
+
+
+                        window.history.replaceState(
+
+                            null,
+
+                            "",
+
+                            "#" +
+                            sectionId
+
+                        );
+
+                    }
+
+                );
+
+            }
+
+        );
+
+
+        /* =================================================
+           REFRESH BUTTONS
+        ================================================= */
 
         if (
             refreshUsersButton
@@ -2465,25 +2567,46 @@ document.addEventListener(
 
                 "click",
 
-                function () {
+                async function () {
 
-                    loadUsers();
+                    refreshUsersButton.disabled =
+                        true;
+
+
+                    const originalText =
+                        refreshUsersButton.textContent;
+
+
+                    refreshUsersButton.textContent =
+                        "Refreshing...";
+
+
+                    try {
+
+                        await loadUsers();
+
+
+                        showMessage(
+                            "Users refreshed successfully.",
+                            "success"
+                        );
+
+                    } finally {
+
+                        refreshUsersButton.disabled =
+                            false;
+
+
+                        refreshUsersButton.textContent =
+                            originalText;
+
+                    }
 
                 }
 
             );
 
         }
-
-
-        /* =================================================
-           REFRESH DEPOSITS
-        ================================================= */
-
-        const refreshDepositsButton =
-            document.getElementById(
-                "refreshDepositsButton"
-            );
 
 
         if (
@@ -2494,9 +2617,40 @@ document.addEventListener(
 
                 "click",
 
-                function () {
+                async function () {
 
-                    loadDeposits();
+                    refreshDepositsButton.disabled =
+                        true;
+
+
+                    const originalText =
+                        refreshDepositsButton.textContent;
+
+
+                    refreshDepositsButton.textContent =
+                        "Refreshing...";
+
+
+                    try {
+
+                        await loadDeposits();
+
+
+                        showMessage(
+                            "Deposits refreshed successfully.",
+                            "success"
+                        );
+
+                    } finally {
+
+                        refreshDepositsButton.disabled =
+                            false;
+
+
+                        refreshDepositsButton.textContent =
+                            originalText;
+
+                    }
 
                 }
 
@@ -2506,41 +2660,37 @@ document.addEventListener(
 
 
         /* =================================================
-           LOGOUT
-        ================================================= */
-
-        /*
-        auth.js already handles:
-
-        [data-action="logout"]
-
-        Therefore we do not create another
-        conflicting logout listener here.
-        */
-
-
-        /* =================================================
-           INITIALIZATION
+           INITIAL LOAD
         ================================================= */
 
         loadAdminProfile();
 
 
         const hash =
-            window.location.hash
-                .replace(
-                    "#",
-                    ""
-                );
+            String(
+                window.location.hash ||
+                ""
+            )
+            .replace(
+                "#",
+                ""
+            );
 
 
         if (
 
-            hash &&
+            hash ===
+            "users"
 
-            document.getElementById(
-                hash
-            )
+            ||
+
+            hash ===
+            "deposits"
+
+            ||
+
+            hash ===
+            "overview"
 
         ) {
 
@@ -2551,43 +2701,47 @@ document.addEventListener(
         }
 
 
-        else {
+        /*
+        --------------------------------------------------
+        Dashboard statistics
+        --------------------------------------------------
+        */
 
-            const activeSection =
-                document.querySelector(
-                    ".dashboard-section.active-section"
-                );
-
-
-            if (
-
-                activeSection &&
-
-                activeSection.id ===
-                "users"
-
-            ) {
-
-                loadUsers();
-
-            }
+        loadUsers();
 
 
-            if (
+        loadDeposits();
 
-                activeSection &&
 
-                activeSection.id ===
-                "deposits"
+        /* =================================================
+           PUBLIC DEBUG API
+        ================================================= */
 
-            ) {
+        window.SkillEarnAdminDashboard = {
 
-                loadDeposits();
+            loadUsers,
 
-            }
+            loadDeposits,
 
-        }
+            showSection,
+
+            getUsers:
+                function () {
+
+                    return currentUsers;
+
+                },
+
+            getDeposits:
+                function () {
+
+                    return currentDeposits;
+
+                }
+
+        };
 
 
     }
+
 );
