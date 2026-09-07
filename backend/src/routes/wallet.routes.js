@@ -17,7 +17,7 @@ authMiddleware;
 
 if (typeof protect !== "function") {
 throw new Error(
-"Authentication middleware is not exported correctly."
+"Authentication middleware is not exported correctly from auth.middleware.js"
 );
 }
 
@@ -31,7 +31,7 @@ getTransactionHistory
 function requireController(fn, name) {
 if (typeof fn !== "function") {
 throw new Error(
-`Wallet controller function "${name}" is missing.`
+`Wallet controller function "${name}" is missing or not exported correctly.`
 );
 }
 
