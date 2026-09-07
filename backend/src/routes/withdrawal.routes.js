@@ -26,13 +26,9 @@ authMiddleware.protect ||
 authMiddleware;
 
 if (typeof requireAuth !== "function") {
-
-```
 throw new Error(
-    "Withdrawal routes failed to load: requireAuth middleware is missing."
+"withdrawal.routes.js: requireAuth middleware is missing or invalid."
 );
-```
-
 }
 
 /* =========================================================
@@ -44,101 +40,58 @@ const adminMiddleware = require(
 );
 
 const requireAdmin =
-adminMiddleware.requireAdmin ||
-adminMiddleware.protect ||
-adminMiddleware;
+adminMiddleware.requireAdmin;
 
 if (typeof requireAdmin !== "function") {
-
-```
 throw new Error(
-    "Withdrawal routes failed to load: requireAdmin middleware is missing."
+"withdrawal.routes.js: requireAdmin middleware is missing or invalid."
 );
-```
-
 }
 
 /* =========================================================
 CONTROLLER FUNCTIONS
 ========================================================= */
 
-const createWithdrawal =
-withdrawalController.createWithdrawal;
-
-const getMyWithdrawals =
-withdrawalController.getMyWithdrawals;
-
-const getPendingWithdrawals =
-withdrawalController.getPendingWithdrawals;
-
-const approveWithdrawal =
-withdrawalController.approveWithdrawal;
-
-const rejectWithdrawal =
-withdrawalController.rejectWithdrawal;
+const {
+createWithdrawal,
+getMyWithdrawals,
+getPendingWithdrawals,
+approveWithdrawal,
+rejectWithdrawal
+} = withdrawalController;
 
 /* =========================================================
 CONTROLLER VALIDATION
 ========================================================= */
 
-if (
-typeof createWithdrawal !== "function"
-) {
-
-```
+if (typeof createWithdrawal !== "function") {
 throw new Error(
-    "Withdrawal controller export missing: createWithdrawal"
+"withdrawal.routes.js: controller.createWithdrawal is missing or invalid."
 );
-```
-
 }
 
-if (
-typeof getMyWithdrawals !== "function"
-) {
-
-```
+if (typeof getMyWithdrawals !== "function") {
 throw new Error(
-    "Withdrawal controller export missing: getMyWithdrawals"
+"withdrawal.routes.js: controller.getMyWithdrawals is missing or invalid."
 );
-```
-
 }
 
-if (
-typeof getPendingWithdrawals !== "function"
-) {
-
-```
+if (typeof getPendingWithdrawals !== "function") {
 throw new Error(
-    "Withdrawal controller export missing: getPendingWithdrawals"
+"withdrawal.routes.js: controller.getPendingWithdrawals is missing or invalid."
 );
-```
-
 }
 
-if (
-typeof approveWithdrawal !== "function"
-) {
-
-```
+if (typeof approveWithdrawal !== "function") {
 throw new Error(
-    "Withdrawal controller export missing: approveWithdrawal"
+"withdrawal.routes.js: controller.approveWithdrawal is missing or invalid."
 );
-```
-
 }
 
-if (
-typeof rejectWithdrawal !== "function"
-) {
-
-```
+if (typeof rejectWithdrawal !== "function") {
 throw new Error(
-    "Withdrawal controller export missing: rejectWithdrawal"
+"withdrawal.routes.js: controller.rejectWithdrawal is missing or invalid."
 );
-```
-
 }
 
 /* =========================================================
