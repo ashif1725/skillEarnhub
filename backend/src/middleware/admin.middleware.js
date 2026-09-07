@@ -4,85 +4,47 @@
 NORMALIZE ROLE
 ========================================================= */
 
-function normalizeRole(
-role
-) {
-
-```
-return String(
-    role || "user"
-)
+function normalizeRole(role) {
+return String(role || "user")
 .trim()
 .toLowerCase();
-```
-
 }
 
 /* =========================================================
 REQUIRE ADMIN
 ========================================================= */
 
-function requireAdmin(
-req,
-res,
-next
-) {
+function requireAdmin(req, res, next) {
 
 ```
-if (
-    !req.user
-) {
+if (!req.user) {
 
-    return res.status(
-        401
-    )
-    .json({
-
-        success:
-            false,
-
-        error:
-            "AUTHENTICATION_REQUIRED",
-
-        message:
-            "Please sign in."
-
+    return res.status(401).json({
+        success: false,
+        error: "AUTHENTICATION_REQUIRED",
+        message: "Please sign in."
     });
 
 }
 
 
-const role =
-    normalizeRole(
-        req.user.role
-    );
+const role = normalizeRole(req.user.role);
 
 
-if (
-    ![
-        "admin",
-        "administrator",
-        "super_admin",
-        "superadmin"
-    ].includes(
-        role
-    )
-) {
+const allowedRoles = [
+    "admin",
+    "administrator",
+    "super_admin",
+    "superadmin"
+];
 
-    return res.status(
-        403
-    )
-    .json({
 
-        success:
-            false,
+if (!allowedRoles.includes(role)) {
 
-        error:
-            "ADMIN_ACCESS_REQUIRED",
-
-        message:
-            "Administrator access is required."
-
+    return res.status(403).json({
+        success: false,
+        error: "ADMIN_ACCESS_REQUIRED",
+        message: "Administrator access is required."
     });
 
 }
@@ -97,65 +59,35 @@ return next();
 REQUIRE SUPER ADMIN
 ========================================================= */
 
-function requireSuperAdmin(
-req,
-res,
-next
-) {
+function requireSuperAdmin(req, res, next) {
 
 ```
-if (
-    !req.user
-) {
+if (!req.user) {
 
-    return res.status(
-        401
-    )
-    .json({
-
-        success:
-            false,
-
-        error:
-            "AUTHENTICATION_REQUIRED",
-
-        message:
-            "Please sign in."
-
+    return res.status(401).json({
+        success: false,
+        error: "AUTHENTICATION_REQUIRED",
+        message: "Please sign in."
     });
 
 }
 
 
-const role =
-    normalizeRole(
-        req.user.role
-    );
+const role = normalizeRole(req.user.role);
 
 
-if (
-    ![
-        "super_admin",
-        "superadmin"
-    ].includes(
-        role
-    )
-) {
+const allowedRoles = [
+    "super_admin",
+    "superadmin"
+];
 
-    return res.status(
-        403
-    )
-    .json({
 
-        success:
-            false,
+if (!allowedRoles.includes(role)) {
 
-        error:
-            "SUPER_ADMIN_ACCESS_REQUIRED",
-
-        message:
-            "Super administrator access is required."
-
+    return res.status(403).json({
+        success: false,
+        error: "SUPER_ADMIN_ACCESS_REQUIRED",
+        message: "Super administrator access is required."
     });
 
 }
@@ -171,11 +103,6 @@ EXPORTS
 ========================================================= */
 
 module.exports = {
-
-```
 requireAdmin,
-
 requireSuperAdmin
-```
-
 };
