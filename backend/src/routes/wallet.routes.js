@@ -4,21 +4,43 @@ const express = require("express");
 
 const router = express.Router();
 
-const authMiddleware =
-require("../middleware/auth.middleware");
+const authMiddleware = require("../middleware/auth.middleware");
+const walletController = require("../controllers/wallet.controller");
 
-const walletController =
-require("../controllers/wallet.controller");
+/* =========================================================
+AUTH MIDDLEWARE
+========================================================= */
 
-const protect =
-authMiddleware.protect ||
+const requireAuth =
 authMiddleware.requireAuth ||
+authMiddleware.protect ||
 authMiddleware;
 
-if (typeof protect !== "function") {
+if (typeof requireAuth !== "function") {
+
+```
 throw new Error(
-"Authentication middleware is not exported correctly from auth.middleware.js"
+    "Wallet routes failed to load: requireAuth middleware is not exported correctly."
 );
+```
+
+}
+
+/* =========================================================
+WALLET CONTROLLER VALIDATION
+========================================================= */
+
+if (
+!walletController ||
+typeof walletController !== "object"
+) {
+
+```
+throw new Error(
+    "Wallet routes failed to load: wallet.controller.js is not exported correctly."
+);
+```
+
 }
 
 const {
@@ -28,53 +50,93 @@ withdrawFunds,
 getTransactionHistory
 } = walletController;
 
-function requireController(fn, name) {
-if (typeof fn !== "function") {
-throw new Error(
-`Wallet controller function "${name}" is missing or not exported correctly.`
-);
-}
+/* =========================================================
+REQUIRE CONTROLLER
+========================================================= */
+
+function requireController(
+controller,
+name
+) {
 
 ```
-return fn;
+if (
+    typeof controller !== "function"
+) {
+
+    throw new Error(
+        `Wallet controller "${name}" is missing or is not a function.`
+    );
+
+}
+
+return controller;
 ```
 
 }
+
+/* =========================================================
+GET WALLET
+
+GET /api/wallet
+========================================================= */
 
 router.get(
 "/",
-protect,
+requireAuth,
 requireController(
 getWallet,
 "getWallet"
 )
 );
 
+/* =========================================================
+ADD FUNDS
+
+POST /api/wallet/add
+========================================================= */
+
 router.post(
 "/add",
-protect,
+requireAuth,
 requireController(
 addFunds,
 "addFunds"
 )
 );
 
+/* =========================================================
+WITHDRAW FUNDS
+
+POST /api/wallet/withdraw
+========================================================= */
+
 router.post(
 "/withdraw",
-protect,
+requireAuth,
 requireController(
 withdrawFunds,
 "withdrawFunds"
 )
 );
 
+/* =========================================================
+TRANSACTION HISTORY
+
+GET /api/wallet/transactions
+========================================================= */
+
 router.get(
 "/transactions",
-protect,
+requireAuth,
 requireController(
 getTransactionHistory,
 "getTransactionHistory"
 )
 );
+
+/* =========================================================
+EXPORT
+========================================================= */
 
 module.exports = router;
