@@ -13,34 +13,46 @@ const router =
 
 const {
 
-    requireAuth,
-
-    requireAdmin
-
-} =
-    require(
-        "../middleware/auth.middleware"
-    );
-
-
-const {
-
     getUsers,
+
+    getUsersCount,
 
     getUserDetails,
 
     updateUserStatus
 
-} =
-    require(
-        "../services/admin-users.service"
-    );
+} = require(
+    "../services/admin-users.service"
+);
+
+
+const {
+    requireAuth
+} = require(
+    "../middleware/auth.middleware"
+);
+
+
+const {
+    requireAdmin
+} = require(
+    "../middleware/admin.middleware"
+);
 
 
 /*
 |--------------------------------------------------------------------------
-| GET USERS
+| GET ADMIN USERS
 |--------------------------------------------------------------------------
+|
+| GET /api/admin/users
+|
+| Optional:
+|
+| ?search=
+| ?limit=
+| ?offset=
+|
 */
 
 router.get(
@@ -56,87 +68,79 @@ router.get(
         res
     ) {
 
+
         try {
-
-            const search =
-                req.query.search ||
-                null;
-
-
-            const status =
-                req.query.status ||
-                null;
-
-
-            const limit =
-                Math.min(
-
-                    Math.max(
-
-                        Number(
-                            req.query.limit
-                        ) || 25,
-
-                        1
-
-                    ),
-
-                    100
-
-                );
-
-
-            const offset =
-                Math.max(
-
-                    Number(
-                        req.query.offset
-                    ) || 0,
-
-                    0
-
-                );
 
 
             const users =
                 await getUsers({
 
-                    search,
+                    search:
+                        req.query.search,
 
-                    status,
+                    limit:
+                        req.query.limit,
 
-                    limit,
-
-                    offset
+                    offset:
+                        req.query.offset
 
                 });
 
 
-            return res.status(200).json({
+            const total =
+                await getUsersCount({
+
+                    search:
+                        req.query.search
+
+                });
+
+
+            return res.json({
 
                 success:
                     true,
 
-                users
+                users,
+
+                total,
+
+                limit:
+                    Number(
+                        req.query.limit
+                    ) ||
+                    50,
+
+                offset:
+                    Number(
+                        req.query.offset
+                    ) ||
+                    0
 
             });
 
 
-        } catch (error) {
+        } catch (
+            error
+        ) {
+
 
             console.error(
-                "GET USERS ERROR:",
+
+                "ADMIN GET USERS ERROR:",
+
                 error
+
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            )
+            .json({
 
                 success:
                     false,
-
-                error:
-                    "GET_USERS_FAILED",
 
                 message:
                     "Unable to load users."
@@ -152,8 +156,11 @@ router.get(
 
 /*
 |--------------------------------------------------------------------------
-| GET USER DETAILS
+| GET SINGLE USER
 |--------------------------------------------------------------------------
+|
+| GET /api/admin/users/:userId
+|
 */
 
 router.get(
@@ -169,7 +176,9 @@ router.get(
         res
     ) {
 
+
         try {
+
 
             const user =
                 await getUserDetails(
@@ -177,22 +186,7 @@ router.get(
                 );
 
 
-            if (!user) {
-
-                return res.status(404).json({
-
-                    success:
-                        false,
-
-                    error:
-                        "USER_NOT_FOUND"
-
-                });
-
-            }
-
-
-            return res.status(200).json({
+            return res.json({
 
                 success:
                     true,
@@ -202,21 +196,53 @@ router.get(
             });
 
 
-        } catch (error) {
+        } catch (
+            error
+        ) {
+
+
+            if (
+
+                error.code ===
+                "USER_NOT_FOUND"
+
+            ) {
+
+                return res.status(
+                    404
+                )
+                .json({
+
+                    success:
+                        false,
+
+                    message:
+                        "User not found."
+
+                });
+
+            }
+
 
             console.error(
-                "GET USER DETAILS ERROR:",
+
+                "ADMIN GET USER DETAILS ERROR:",
+
                 error
+
             );
 
 
-            return res.status(500).json({
+            return res.status(
+                500
+            )
+            .json({
 
                 success:
                     false,
 
-                error:
-                    "GET_USER_DETAILS_FAILED"
+                message:
+                    "Unable to load user details."
 
             });
 
@@ -231,6 +257,9 @@ router.get(
 |--------------------------------------------------------------------------
 | UPDATE USER STATUS
 |--------------------------------------------------------------------------
+|
+| PATCH /api/admin/users/:userId/status
+|
 */
 
 router.patch(
@@ -246,19 +275,21 @@ router.patch(
         res
     ) {
 
+
         try {
 
-            const result =
+
+            const user =
                 await updateUserStatus({
 
                     userId:
                         req.params.userId,
 
                     status:
-                        req.body.status,
+                        req.body?.status,
 
                     adminUserId:
-                        req.user.id,
+                        req.user?.id,
 
                     ipAddress:
                         req.ip,
@@ -271,26 +302,31 @@ router.patch(
                 });
 
 
-            return res.status(200).json({
+            return res.json({
 
                 success:
                     true,
 
-                user:
-                    result
+                user
 
             });
 
 
-        } catch (error) {
+        } catch (
+            error
+        ) {
+
 
             console.error(
-                "UPDATE USER STATUS ERROR:",
+
+                "ADMIN UPDATE USER STATUS ERROR:",
+
                 error
+
             );
 
 
-            const errorCode =
+            const code =
                 error.code ||
                 error.message;
 
@@ -309,30 +345,36 @@ router.patch(
             };
 
 
-            const statusCode =
+            const httpStatus =
                 statusMap[
-                    errorCode
-                ] || 500;
+                    code
+                ]
+                ||
+                500;
 
 
-            return res
-                .status(
-                    statusCode
-                )
-                .json({
+            return res.status(
+                httpStatus
+            )
+            .json({
 
-                    success:
-                        false,
+                success:
+                    false,
 
-                    error:
+                message:
 
-                        statusCode === 500
+                    httpStatus ===
+                    500
 
-                            ? "STATUS_UPDATE_FAILED"
+                        ?
 
-                            : errorCode
+                        "Unable to update user status."
 
-                });
+                        :
+
+                        code
+
+            });
 
         }
 
@@ -340,6 +382,12 @@ router.patch(
 
 );
 
+
+/*
+|--------------------------------------------------------------------------
+| EXPORT
+|--------------------------------------------------------------------------
+*/
 
 module.exports =
     router;
