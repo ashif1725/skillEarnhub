@@ -28,7 +28,8 @@ if (!allowedRoles.includes(role)) {
 return res.status(403).json({
 success: false,
 error: "ADMIN_ACCESS_REQUIRED",
-message: "Administrator access is required."
+message:
+"Administrator access is required."
 });
 }
 
@@ -46,11 +47,17 @@ message: "Please sign in."
 
 const role = normalizeRole(req.user.role);
 
-if (!["super_admin", "superadmin"].includes(role)) {
+const allowedRoles = [
+"super_admin",
+"superadmin"
+];
+
+if (!allowedRoles.includes(role)) {
 return res.status(403).json({
 success: false,
 error: "SUPER_ADMIN_ACCESS_REQUIRED",
-message: "Super administrator access is required."
+message:
+"Super administrator access is required."
 });
 }
 
