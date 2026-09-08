@@ -3,57 +3,73 @@
 const express = require("express");
 const router = express.Router();
 
-const authMiddleware = require(
-"../middleware/auth.middleware"
-);
+const authMiddleware = require("../middleware/auth.middleware");
 
-const adminMiddleware = require(
-"../middleware/admin.middleware"
-);
+const adminMiddleware = require("../middleware/admin.middleware");
 
-const {
-getPendingDeposits,
-approveDepositRequest,
-rejectDepositRequest
-} = require(
-"../services/deposit.service"
-);
+const depositService = require("../services/deposit.service");
 
 const requireAuth =
 authMiddleware.requireAuth ||
 authMiddleware.protect ||
 authMiddleware;
 
-const requireAdmin =
-adminMiddleware.requireAdmin;
+const requireAdmin = adminMiddleware.requireAdmin;
 
 if (typeof requireAuth !== "function") {
 throw new Error(
-"requireAuth middleware is missing or invalid."
+"admin-deposit-requests.js: requireAuth middleware is missing or invalid."
 );
 }
 
 if (typeof requireAdmin !== "function") {
 throw new Error(
-"requireAdmin middleware is missing or invalid."
+"admin-deposit-requests.js: requireAdmin middleware is missing or invalid."
 );
 }
 
-if (
-typeof getPendingDeposits !== "function" ||
-typeof approveDepositRequest !== "function" ||
-typeof rejectDepositRequest !== "function"
-) {
+if (!depositService) {
 throw new Error(
-"Required deposit service functions are missing."
+"admin-deposit-requests.js: deposit service is missing."
 );
 }
+
+const getPendingDeposits =
+depositService.getPendingDeposits;
+
+const approveDepositRequest =
+depositService.approveDepositRequest;
+
+const rejectDepositRequest =
+depositService.rejectDepositRequest;
+
+if (typeof getPendingDeposits !== "function") {
+throw new Error(
+"admin-deposit-requests.js: getPendingDeposits is missing."
+);
+}
+
+if (typeof approveDepositRequest !== "function") {
+throw new Error(
+"admin-deposit-requests.js: approveDepositRequest is missing."
+);
+}
+
+if (typeof rejectDepositRequest !== "function") {
+throw new Error(
+"admin-deposit-requests.js: rejectDepositRequest is missing."
+);
+}
+
+/* =========================================================
+GET PENDING DEPOSITS
+========================================================= */
 
 router.get(
 "/",
 requireAuth,
 requireAdmin,
-async (req, res) => {
+async function (req, res) {
 try {
 const deposits =
 await getPendingDeposits();
@@ -63,7 +79,6 @@ await getPendingDeposits();
     success: true,
     deposits: deposits || []
   });
-
 } catch (error) {
   console.error(
     "ADMIN GET DEPOSITS ERROR:",
@@ -85,19 +100,22 @@ await getPendingDeposits();
 }
 );
 
+/* =========================================================
+APPROVE DEPOSIT
+========================================================= */
+
 router.post(
 "/:depositId/approve",
 requireAuth,
 requireAdmin,
-async (req, res) => {
+async function (req, res) {
 try {
 const depositId = String(
 req.params.depositId || ""
 ).trim();
 
 ```
-  const adminUserId =
-    req.user?.id;
+  const adminUserId = req.user?.id;
 
   if (!depositId) {
     return res.status(400).json({
@@ -129,14 +147,25 @@ req.params.depositId || ""
       "Deposit approved successfully.",
     result
   });
-
 } catch (error) {
   console.error(
     "ADMIN APPROVE DEPOSIT ERROR:",
     error
   );
 
-  return res.status(400).json({
+  let statusCode = 400;
+
+  if (error.code === "DEPOSIT_NOT_FOUND") {
+    statusCode = 404;
+  }
+
+  if (
+    error.code === "DEPOSIT_ALREADY_PROCESSED"
+  ) {
+    statusCode = 409;
+  }
+
+  return res.status(statusCode).json({
     success: false,
     error:
       error.code ||
@@ -151,19 +180,22 @@ req.params.depositId || ""
 }
 );
 
+/* =========================================================
+REJECT DEPOSIT
+========================================================= */
+
 router.post(
 "/:depositId/reject",
 requireAuth,
 requireAdmin,
-async (req, res) => {
+async function (req, res) {
 try {
 const depositId = String(
 req.params.depositId || ""
 ).trim();
 
 ```
-  const adminUserId =
-    req.user?.id;
+  const adminUserId = req.user?.id;
 
   const reason =
     typeof req.body?.reason === "string"
@@ -201,14 +233,25 @@ req.params.depositId || ""
       "Deposit rejected successfully.",
     result
   });
-
 } catch (error) {
   console.error(
     "ADMIN REJECT DEPOSIT ERROR:",
     error
   );
 
-  return res.status(400).json({
+  let statusCode = 400;
+
+  if (error.code === "DEPOSIT_NOT_FOUND") {
+    statusCode = 404;
+  }
+
+  if (
+    error.code === "DEPOSIT_ALREADY_PROCESSED"
+  ) {
+    statusCode = 409;
+  }
+
+  return res.status(statusCode).json({
     success: false,
     error:
       error.code ||
