@@ -1,10 +1,18 @@
 "use strict";
 
+/* =========================================================
+ROLE NORMALIZATION
+========================================================= */
+
 function normalizeRole(role) {
 return String(role || "user")
 .trim()
 .toLowerCase();
 }
+
+/* =========================================================
+REQUIRE AUTHENTICATED ADMIN
+========================================================= */
 
 function requireAdmin(req, res, next) {
 if (!req.user) {
@@ -38,6 +46,10 @@ return next();
 
 }
 
+/* =========================================================
+REQUIRE SUPER ADMIN
+========================================================= */
+
 function requireSuperAdmin(req, res, next) {
 if (!req.user) {
 return res.status(401).json({
@@ -68,7 +80,12 @@ return next();
 
 }
 
+/* =========================================================
+EXPORTS
+========================================================= */
+
 module.exports = {
+normalizeRole,
 requireAdmin,
 requireSuperAdmin
 };
