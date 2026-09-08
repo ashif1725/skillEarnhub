@@ -3,60 +3,65 @@
 const express = require("express");
 const router = express.Router();
 
-const depositService = require(
-"../services/deposit.service"
-);
+const depositService = require("../services/deposit.service");
 
-const authMiddleware = require(
-"../middleware/auth.middleware"
-);
+const authMiddleware = require("../middleware/auth.middleware");
 
-const adminMiddleware = require(
-"../middleware/admin.middleware"
-);
+const adminMiddleware = require("../middleware/admin.middleware");
 
 const requireAuth =
 authMiddleware.requireAuth ||
 authMiddleware.protect ||
 authMiddleware;
 
-const requireAdmin =
-adminMiddleware.requireAdmin;
+const requireAdmin = adminMiddleware.requireAdmin;
 
 if (typeof requireAuth !== "function") {
 throw new Error(
-"requireAuth middleware is missing or invalid."
+"admin-deposit.routes.js: requireAuth middleware is missing or invalid."
 );
 }
 
 if (typeof requireAdmin !== "function") {
 throw new Error(
-"requireAdmin middleware is missing or invalid."
+"admin-deposit.routes.js: requireAdmin middleware is missing or invalid."
 );
 }
 
-if (
-!depositService ||
-typeof depositService.getPendingDeposits !== "function" ||
-typeof depositService.approveDepositRequest !== "function" ||
-typeof depositService.rejectDepositRequest !== "function"
-) {
+if (!depositService) {
 throw new Error(
-"Required deposit service functions are missing."
+"admin-deposit.routes.js: deposit service is missing."
 );
 }
 
-| /*                                                                         |
-| -------------------------------------------------------------------------- |
-| GET PENDING DEPOSITS                                                       |
-| -------------------------------------------------------------------------- |
-| */                                                                         |
+if (typeof depositService.getPendingDeposits !== "function") {
+throw new Error(
+"admin-deposit.routes.js: getPendingDeposits is missing."
+);
+}
+
+if (typeof depositService.approveDepositRequest !== "function") {
+throw new Error(
+"admin-deposit.routes.js: approveDepositRequest is missing."
+);
+}
+
+if (typeof depositService.rejectDepositRequest !== "function") {
+throw new Error(
+"admin-deposit.routes.js: rejectDepositRequest is missing."
+);
+}
+
+/* =========================================================
+GET PENDING DEPOSITS
+GET /api/admin/deposits/pending
+========================================================= */
 
 router.get(
 "/pending",
 requireAuth,
 requireAdmin,
-async (req, res) => {
+async function (req, res) {
 try {
 const deposits =
 await depositService.getPendingDeposits();
@@ -66,7 +71,6 @@ await depositService.getPendingDeposits();
     success: true,
     deposits: deposits || []
   });
-
 } catch (error) {
   console.error(
     "GET PENDING DEPOSITS ERROR:",
@@ -88,25 +92,23 @@ await depositService.getPendingDeposits();
 }
 );
 
-| /*                                                                         |
-| -------------------------------------------------------------------------- |
-| APPROVE DEPOSIT                                                            |
-| -------------------------------------------------------------------------- |
-| */                                                                         |
+/* =========================================================
+APPROVE DEPOSIT
+POST /api/admin/deposits/:depositId/approve
+========================================================= */
 
 router.post(
 "/:depositId/approve",
 requireAuth,
 requireAdmin,
-async (req, res) => {
+async function (req, res) {
 try {
 const depositId = String(
 req.params.depositId || ""
 ).trim();
 
 ```
-  const adminUserId =
-    req.user?.id;
+  const adminUserId = req.user?.id;
 
   if (!depositId) {
     return res.status(400).json({
@@ -133,24 +135,26 @@ req.params.depositId || ""
 
   return res.status(200).json({
     success: true,
-    message:
-      "Deposit approved successfully.",
+    message: "Deposit approved successfully.",
     result
   });
-
 } catch (error) {
   console.error(
     "ADMIN APPROVE DEPOSIT ERROR:",
     error
   );
 
-  const statusCode =
-    error.code === "DEPOSIT_NOT_FOUND"
-      ? 404
-      : error.code ===
-          "DEPOSIT_ALREADY_PROCESSED"
-        ? 409
-        : 400;
+  let statusCode = 400;
+
+  if (error.code === "DEPOSIT_NOT_FOUND") {
+    statusCode = 404;
+  }
+
+  if (
+    error.code === "DEPOSIT_ALREADY_PROCESSED"
+  ) {
+    statusCode = 409;
+  }
 
   return res.status(statusCode).json({
     success: false,
@@ -167,25 +171,23 @@ req.params.depositId || ""
 }
 );
 
-| /*                                                                         |
-| -------------------------------------------------------------------------- |
-| REJECT DEPOSIT                                                             |
-| -------------------------------------------------------------------------- |
-| */                                                                         |
+/* =========================================================
+REJECT DEPOSIT
+POST /api/admin/deposits/:depositId/reject
+========================================================= */
 
 router.post(
 "/:depositId/reject",
 requireAuth,
 requireAdmin,
-async (req, res) => {
+async function (req, res) {
 try {
 const depositId = String(
 req.params.depositId || ""
 ).trim();
 
 ```
-  const adminUserId =
-    req.user?.id;
+  const adminUserId = req.user?.id;
 
   const reason =
     typeof req.body?.reason === "string"
@@ -218,24 +220,26 @@ req.params.depositId || ""
 
   return res.status(200).json({
     success: true,
-    message:
-      "Deposit rejected successfully.",
+    message: "Deposit rejected successfully.",
     result
   });
-
 } catch (error) {
   console.error(
     "ADMIN REJECT DEPOSIT ERROR:",
     error
   );
 
-  const statusCode =
-    error.code === "DEPOSIT_NOT_FOUND"
-      ? 404
-      : error.code ===
-          "DEPOSIT_ALREADY_PROCESSED"
-        ? 409
-        : 400;
+  let statusCode = 400;
+
+  if (error.code === "DEPOSIT_NOT_FOUND") {
+    statusCode = 404;
+  }
+
+  if (
+    error.code === "DEPOSIT_ALREADY_PROCESSED"
+  ) {
+    statusCode = 409;
+  }
 
   return res.status(statusCode).json({
     success: false,
