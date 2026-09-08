@@ -44,31 +44,33 @@ throw new Error(
 DEPOSIT SERVICE
 ========================================================= */
 
-const depositService = require(
-"../services/deposit.service"
-);
-
 const {
 getPendingDeposits,
 approveDepositRequest,
 rejectDepositRequest
-} = depositService;
+} = require(
+"../services/deposit.service"
+);
+
+/* =========================================================
+SERVICE VALIDATION
+========================================================= */
 
 if (typeof getPendingDeposits !== "function") {
 throw new Error(
-"admin-deposit-requests.js: getPendingDeposits is missing."
+"admin-deposit-requests.js: getPendingDeposits service is missing."
 );
 }
 
 if (typeof approveDepositRequest !== "function") {
 throw new Error(
-"admin-deposit-requests.js: approveDepositRequest is missing."
+"admin-deposit-requests.js: approveDepositRequest service is missing."
 );
 }
 
 if (typeof rejectDepositRequest !== "function") {
 throw new Error(
-"admin-deposit-requests.js: rejectDepositRequest is missing."
+"admin-deposit-requests.js: rejectDepositRequest service is missing."
 );
 }
 
@@ -85,20 +87,16 @@ requireAdmin,
 
 ```
 async function (req, res) {
-
     try {
-
         const deposits =
             await getPendingDeposits();
 
         return res.status(200).json({
             success: true,
-            deposits:
-                deposits || []
+            deposits: deposits || []
         });
 
     } catch (error) {
-
         console.error(
             "ADMIN GET DEPOSITS ERROR:",
             error
@@ -113,9 +111,7 @@ async function (req, res) {
                 error.message ||
                 "Unable to fetch deposit requests."
         });
-
     }
-
 }
 ```
 
@@ -134,9 +130,7 @@ requireAdmin,
 
 ```
 async function (req, res) {
-
     try {
-
         const depositId =
             String(
                 req.params.depositId || ""
@@ -182,7 +176,6 @@ async function (req, res) {
         });
 
     } catch (error) {
-
         console.error(
             "ADMIN APPROVE DEPOSIT ERROR:",
             error
@@ -193,7 +186,7 @@ async function (req, res) {
                 ? 404
                 : error.code === "DEPOSIT_ALREADY_PROCESSED"
                     ? 409
-                    : 500;
+                    : 400;
 
 
         return res.status(statusCode).json({
@@ -205,9 +198,7 @@ async function (req, res) {
                 error.message ||
                 "Unable to approve deposit."
         });
-
     }
-
 }
 ```
 
@@ -226,9 +217,7 @@ requireAdmin,
 
 ```
 async function (req, res) {
-
     try {
-
         const depositId =
             String(
                 req.params.depositId || ""
@@ -281,7 +270,6 @@ async function (req, res) {
         });
 
     } catch (error) {
-
         console.error(
             "ADMIN REJECT DEPOSIT ERROR:",
             error
@@ -292,7 +280,7 @@ async function (req, res) {
                 ? 404
                 : error.code === "DEPOSIT_ALREADY_PROCESSED"
                     ? 409
-                    : 500;
+                    : 400;
 
 
         return res.status(statusCode).json({
@@ -304,9 +292,7 @@ async function (req, res) {
                 error.message ||
                 "Unable to reject deposit."
         });
-
     }
-
 }
 ```
 
