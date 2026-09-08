@@ -57,7 +57,7 @@ if (
 typeof depositService.getPendingDeposits !== "function"
 ) {
 throw new Error(
-"admin-deposit.routes.js: depositService.getPendingDeposits is missing."
+"admin-deposit.routes.js: getPendingDeposits service is missing."
 );
 }
 
@@ -65,7 +65,7 @@ if (
 typeof depositService.approveDepositRequest !== "function"
 ) {
 throw new Error(
-"admin-deposit.routes.js: depositService.approveDepositRequest is missing."
+"admin-deposit.routes.js: approveDepositRequest service is missing."
 );
 }
 
@@ -73,7 +73,7 @@ if (
 typeof depositService.rejectDepositRequest !== "function"
 ) {
 throw new Error(
-"admin-deposit.routes.js: depositService.rejectDepositRequest is missing."
+"admin-deposit.routes.js: rejectDepositRequest service is missing."
 );
 }
 
@@ -90,19 +90,16 @@ requireAdmin,
 
 ```
 async function (req, res) {
-
     try {
-
         const deposits =
             await depositService.getPendingDeposits();
 
         return res.status(200).json({
             success: true,
-            deposits
+            deposits: deposits || []
         });
 
     } catch (error) {
-
         console.error(
             "GET PENDING DEPOSITS ERROR:",
             error
@@ -117,9 +114,7 @@ async function (req, res) {
                 error.message ||
                 "Unable to load deposits."
         });
-
     }
-
 }
 ```
 
@@ -138,9 +133,7 @@ requireAdmin,
 
 ```
 async function (req, res) {
-
     try {
-
         const depositId =
             String(
                 req.params.depositId || ""
@@ -185,7 +178,6 @@ async function (req, res) {
         });
 
     } catch (error) {
-
         console.error(
             "ADMIN APPROVE DEPOSIT ERROR:",
             error
@@ -208,9 +200,7 @@ async function (req, res) {
                 error.message ||
                 "Unable to approve deposit."
         });
-
     }
-
 }
 ```
 
@@ -229,9 +219,7 @@ requireAdmin,
 
 ```
 async function (req, res) {
-
     try {
-
         const depositId =
             String(
                 req.params.depositId || ""
@@ -283,7 +271,6 @@ async function (req, res) {
         });
 
     } catch (error) {
-
         console.error(
             "ADMIN REJECT DEPOSIT ERROR:",
             error
@@ -306,9 +293,7 @@ async function (req, res) {
                 error.message ||
                 "Unable to reject deposit."
         });
-
     }
-
 }
 ```
 
